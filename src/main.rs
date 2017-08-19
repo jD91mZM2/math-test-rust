@@ -1,6 +1,7 @@
 extern crate num;
 
 mod parser;
+mod calculator;
 
 use std::io;
 
@@ -19,6 +20,12 @@ fn main() {
 		}
 		let input = input.trim();
 
-		println!("{:?}", parser::parse(input));
+		match parser::parse(input) {
+			Ok(parsed) => match calculator::calculate(parsed) {
+				Ok(result) =>  println!("{}", result),
+				Err(err)   => eprintln!("{}", err)
+			},
+			Err(err) => eprintln!("{}", err)
+		}
 	}
 }

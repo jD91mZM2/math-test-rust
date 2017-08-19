@@ -3,11 +3,13 @@ use num::BigInt;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Token {
+	Empty,
 	Num(BigInt),
 	Add,
 	Sub,
 	Mult,
 	Div,
+	Mod,
 	And,
 	Or,
 	Xor,
@@ -60,8 +62,18 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 											.parse()
 											.map_err(|_| ParseError::NotANumber)?;
 				if output.last() == Some(&Token::Sub) {
-					output.pop();
-					num = -num;
+					match if output.len() >= 2 {
+							Some(&output[output.len() - 2])
+						} else {
+							None
+						} {
+						Some(&Token::Num(_)) => (),
+						Some(&Token::Block(..)) => (),
+						_ => {
+							output.pop();
+							num = -num;
+						}
+					}
 				}
 				output.push(Token::Num(num));
 			}
@@ -71,10 +83,12 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 	let mut chars = input.chars().enumerate();
 	while let Some((i, c)) = chars.next() {
 		let token = match c {
+			' ' => continue,
 			'+' => Some(Token::Add),
 			'-' => Some(Token::Sub),
 			'*' => Some(Token::Mult),
 			'/' => Some(Token::Div),
+			'%' => Some(Token::Mod),
 			'&' => Some(Token::And),
 			'|' => Some(Token::Or),
 			'^' => Some(Token::Xor),
@@ -123,7 +137,7 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 							None => return Err(ParseError::TooManyParens),
 						}
 					} else if c == ')' {
-						if parens <= 1 {
+						if parens == 0 {
 							end = i;
 							break;
 						}
@@ -142,8 +156,7 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 			let code = c as u32;
 			if (code < '0' as u32 || code > '9' as u32) &&
 				(code < 'a' as u32 || code > 'z' as u32) &&
-				(code < 'A' as u32 || code > 'Z' as u32) &&
-				(c != ' ') {
+				(code < 'A' as u32 || code > 'Z' as u32) {
 
 				return Err(ParseError::DisallowedChar(c))
 			} else {

@@ -8,8 +8,8 @@ use rustyline::Editor;
 use rustyline::error::ReadlineError;
 
 fn main() {
+	let mut rl = Editor::<()>::new();
 	loop {
-		let mut rl = Editor::<()>::new();
 		let input = match rl.readline("> ") {
 			Ok(input) => input,
 			Err(ReadlineError::Interrupted) |

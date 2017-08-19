@@ -1,26 +1,27 @@
 extern crate num;
+extern crate rustyline;
 
-mod parser;
 mod calculator;
+mod parser;
 
-use std::io;
+use rustyline::Editor;
+use rustyline::error::ReadlineError;
 
 fn main() {
 	loop {
-		let mut input = String::new();
-
-		match io::stdin().read_line(&mut input) {
-			Ok(0) => break,
-			Ok(_) => (),
+		let mut rl = Editor::<()>::new();
+		let input = match rl.readline("> ") {
+			Ok(input) => input,
+			Err(ReadlineError::Interrupted) |
+			Err(ReadlineError::Eof) => break,
 			Err(err) => {
 				eprintln!("Read from STDIN failed.");
 				eprintln!("Details: {}", err);
 				break;
 			},
-		}
-		let input = input.trim();
+		};
 
-		match parser::parse(input) {
+		match parser::parse(&input) {
 			Ok(parsed) => match calculator::calculate(parsed) {
 				Ok(result) =>  println!("{}", result),
 				Err(err)   => eprintln!("{}", err)

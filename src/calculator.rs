@@ -32,20 +32,23 @@ pub fn calculate(mut tokens: Vec<Token>) -> Result<BigInt, CalcError> {
 		if let Token::Block(..) = *token {
 			// Kinda ugly. Necessary to check type before mem::replacing out of it...
 			if let Token::Block(name, tokens) = mem::replace(token, Token::Empty) {
+				let mut num = calculate(tokens)?;
+
 				if let Some(name) = name {
-					// TODO!
-					return Err(CalcError::UnknownFunction(name));
+					use num::Signed;
+					match &*name {
+						"abs" => num = num.abs(),
+						_ => return Err(CalcError::UnknownFunction(name))
+					}
 				}
 
-				*token = Token::Num(calculate(tokens)?);
+				*token = Token::Num(num);
 			}
 		}
 	}
 
-	println!("{:?}", tokens);
 	calculate_operators(&mut tokens, &[Token::Mult, Token::Div, Token::Mod])?;
 	calculate_operators(&mut tokens, &[Token::Add, Token::Sub])?;
-	println!("{:?}", tokens);
 	calculate_operators(&mut tokens, &[Token::BitshiftLeft, Token::BitshiftRight])?;
 	calculate_operators(&mut tokens, &[Token::And])?;
 	calculate_operators(&mut tokens, &[Token::Xor])?;

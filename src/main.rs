@@ -20,6 +20,7 @@ fn main() {
 				break;
 			},
 		};
+		rl.add_history_entry(&input);
 
 		match parser::parse(&input) {
 			Ok(parsed) => match calculator::calculate(parsed) {

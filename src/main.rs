@@ -4,10 +4,21 @@ extern crate rustyline;
 mod calculator;
 mod parser;
 
+use std::env;
 use rustyline::Editor;
 use rustyline::error::ReadlineError;
 
 fn main() {
+	let mut terminate = false;
+	for arg in env::args().skip(1) {
+		calculate(&arg);
+		terminate = true;
+	}
+
+	if terminate {
+		return;
+	}
+
 	let mut rl = Editor::<()>::new();
 	loop {
 		let input = match rl.readline("> ") {
@@ -21,13 +32,16 @@ fn main() {
 			},
 		};
 		rl.add_history_entry(&input);
+		calculate(&input);
+	}
+}
 
-		match parser::parse(&input) {
-			Ok(parsed) => match calculator::calculate(parsed) {
-				Ok(result) =>  println!("{}", result),
-				Err(err)   => eprintln!("{}", err)
-			},
-			Err(err) => eprintln!("{}", err)
-		}
+pub fn calculate(input: &str) {
+	match parser::parse(input) {
+		Ok(parsed) => match calculator::calculate(parsed) {
+			Ok(result) =>  println!("{}", result),
+			Err(err)   => eprintln!("{}", err)
+		},
+		Err(err) => eprintln!("{}", err)
 	}
 }

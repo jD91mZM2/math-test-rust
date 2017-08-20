@@ -4,14 +4,18 @@ extern crate rustyline;
 mod calculator;
 mod parser;
 
-use std::env;
+use num::BigInt;
 use rustyline::Editor;
 use rustyline::error::ReadlineError;
+use std::collections::HashMap;
+use std::env;
 
 fn main() {
 	let mut terminate = false;
+	let mut variables = HashMap::new();
+
 	for arg in env::args().skip(1) {
-		calculate(&arg);
+		calculate(&arg, &mut variables);
 		terminate = true;
 	}
 
@@ -35,16 +39,21 @@ fn main() {
 			continue;
 		}
 		rl.add_history_entry(&input);
-		calculate(&input);
+		calculate(&input, &mut variables);
 	}
 }
 
-pub fn calculate(input: &str) {
+pub fn calculate(input: &str, variables: &mut HashMap<String, BigInt>) {
 	match parser::parse(input) {
-		Ok(parsed) => match calculator::calculate(&mut parsed.into_iter().peekable()) {
-			// Ok(result) =>  println!("{} (Binary: {:b}) (Hex: {:X})", result, result, result),
-			Ok(result) =>  println!("{}", result),
-			Err(err)   => eprintln!("Error: {}", err)
+		Ok(parsed) => {
+			match calculator::calculate(&mut calculator::Context {
+				variables: variables,
+				tokens: parsed.into_iter().peekable()
+			}) {
+				// Ok(result) =>  println!("{} (Binary: {:b}) (Hex: {:X})", result, result, result),
+				Ok(result) =>  println!("{}", result),
+				Err(err)   => eprintln!("Error: {}", err)
+			}
 		},
 		Err(err) => eprintln!("Error: {}", err)
 	}

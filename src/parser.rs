@@ -64,8 +64,9 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 						None
 					} {
 
-					Some(&Token::Num(_)) => (),
-					Some(&Token::ParenClose) => (),
+					Some(&Token::Num(_)) |
+					Some(&Token::ParenClose) |
+					Some(&Token::VarVal(_)) => (),
 					_ => {
 						output.pop();
 						$num = -$num;

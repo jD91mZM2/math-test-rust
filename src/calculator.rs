@@ -200,30 +200,6 @@ fn calc_level7<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option
 					let primitive2 = to_primitive!(args[1], to_u32);
 					args[0] = BigInt::from(primitive1.pow(primitive2));
 				},
-				"binary" => {
-					usage!(1);
-					use num::{Zero, One};
-					let (zero, one, ten) = (BigInt::zero(), BigInt::one(), BigInt::from(10));
-					let old = mem::replace(&mut args[0], zero.clone());
-
-					let mut i = 0;
-					let mut old_clone = old.clone();
-					while old_clone > zero {
-						old_clone = old_clone >> 1;
-						i += 1;
-					}
-					while old > zero {
-						let new = old.clone() >> i;
-						args[0] = args[0].clone() * ten.clone();
-						if new % 2 == one {
-							args[0] = args[0].clone() + one.clone();
-						}
-						if i == 0 {
-							break;
-						}
-						i -= 1;
-					}
-				},
 				_ => {
 					return Err(CalcError::UnknownFunction(name));
 				}

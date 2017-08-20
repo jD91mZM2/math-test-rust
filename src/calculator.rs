@@ -53,7 +53,8 @@ macro_rules! to_primitive {
 
 pub struct Context<'a, I: Iterator<Item = Token>> {
 	pub tokens: Peekable<I>,
-	pub variables: &'a mut HashMap<String, BigInt>
+	pub variables: &'a mut HashMap<String, BigInt>,
+	pub toplevel: bool,
 }
 
 pub fn calculate<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigInt, CalcError> {
@@ -70,11 +71,11 @@ pub fn calculate<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<
 		return Ok(BigInt::from(primitive1 ^ primitive2));
 	}
 
-	if let Some(found) = context.tokens.next() {
-		return Err(CalcError::ExpectedEOF(found));
+	match context.tokens.peek() {
+		Some(&Token::ParenClose) if !context.toplevel => Ok(expr1),
+		Some(_) => Err(CalcError::ExpectedEOF(context.tokens.next().unwrap())),
+		None => Ok(expr1)
 	}
-
-	Ok(expr1)
 }
 pub fn calc_level2<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigInt, CalcError> {
 	let expr1 = calc_level3(context)?;
@@ -168,12 +169,15 @@ fn calc_level6<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
 fn calc_level7<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option<String>) -> Result<BigInt, CalcError> {
 	if let Some(&Token::ParenOpen) = context.tokens.peek() {
 		context.tokens.next();
+		let toplevel = mem::replace(&mut context.toplevel, false);
+
 		let mut args = vec![calculate(context)?];
 
 		while let Some(&Token::Separator) = context.tokens.peek() {
 			context.tokens.next();
 			args.push(calculate(context)?);
 		}
+		context.toplevel = toplevel;
 		if Some(Token::ParenClose) != context.tokens.next() {
 			return Err(CalcError::UnclosedParen);
 		}

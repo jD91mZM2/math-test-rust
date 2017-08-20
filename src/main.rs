@@ -17,7 +17,9 @@ fn main() {
 	variables.insert("out".to_string(), BigInt::from(10));
 
 	for arg in env::args().skip(1) {
-		calculate(&arg, &mut variables);
+		if let Some(output) = calculate(&arg, &mut variables) {
+			println!("{}", output);
+		}
 		terminate = true;
 	}
 
@@ -41,11 +43,13 @@ fn main() {
 			continue;
 		}
 		rl.add_history_entry(&input);
-		calculate(&input, &mut variables);
+		if let Some(output) = calculate(&input, &mut variables) {
+			println!("= {}", output);
+		}
 	}
 }
 
-pub fn calculate(input: &str, variables: &mut HashMap<String, BigInt>) {
+pub fn calculate(input: &str, variables: &mut HashMap<String, BigInt>) -> Option<String> {
 	use num::ToPrimitive;
 	let radix = match variables.get("in").unwrap().to_u32() {
 		Some(radix) if radix >= 2 && radix <= 36 => radix,
@@ -61,28 +65,29 @@ pub fn calculate(input: &str, variables: &mut HashMap<String, BigInt>) {
 	match parser::parse(input, radix) {
 		Ok(parsed) => {
 			match calculator::calculate(&mut calculator::Context {
+				tokens: parsed.into_iter().peekable(),
 				variables: variables,
-				tokens: parsed.into_iter().peekable()
+				toplevel: true
 			}) {
-				// Ok(result) =>  println!("{} (Binary: {:b}) (Hex: {:X})", result, result, result),
 				Ok(result) => {
 					use num::Zero;
 					if result.is_zero() {
-						return;
+						return None;
 					}
 					match variables.get("out").unwrap().to_u8() {
-						Some(2)  => println!("= {:b}", result),
-						Some(10) => println!("= {}",   result),
-						Some(16) => println!("= {:X}", result),
-						_  =>       {
+						Some(2)  => return Some(format!("{:b}", result)),
+						Some(10) => return Some(result.to_string()),
+						Some(16) => return Some(format!("{:X}", result)),
+						_  => {
 							eprintln!("Warning: Unsupported \"out\" variable value");
-							println!("= {}", result);
+							return Some(result.to_string())
 						},
 					}
 				}
-				Err(err)   => eprintln!("Error: {}", err)
+				Err(err) => eprintln!("Error: {}", err)
 			}
 		},
 		Err(err) => eprintln!("Error: {}", err)
 	}
+	None
 }

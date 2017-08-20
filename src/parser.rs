@@ -18,6 +18,8 @@ pub enum Token {
 	Xor,
 	BitshiftLeft,
 	BitshiftRight,
+	Not,
+	Factorial
 }
 
 #[derive(Debug)]
@@ -107,6 +109,8 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 				}
 				Some(Token::BitshiftRight)
 			},
+			'~' => Some(Token::Not),
+			'!' => Some(Token::Factorial),
 			_   => None
 		};
 

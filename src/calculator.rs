@@ -1,4 +1,4 @@
-use std::{self, fmt};
+use std::{self, fmt, mem};
 use std::iter::Peekable;
 use num::BigInt;
 use parser::Token;
@@ -7,7 +7,7 @@ use parser::Token;
 pub enum CalcError {
 	UnknownFunction(String),
 	IncorrectArguments(usize, usize),
-	BitwiseTooLarge,
+	TooLarge,
 	InvalidSyntax,
 	UnclosedParen
 }
@@ -27,7 +27,7 @@ impl std::error::Error for CalcError {
 		match *self {
 			CalcError::UnknownFunction(_) => "Unknown function",
 			CalcError::IncorrectArguments(..) => "Incorrect amount of arguments!",
-			CalcError::BitwiseTooLarge => "You can only do bitwise operations on smaller numbers",
+			CalcError::TooLarge => "You can only do this operation on smaller numbers",
 			CalcError::InvalidSyntax => "Invalid syntax",
 			CalcError::UnclosedParen => "Unclosed parenthensis"
 		}
@@ -38,7 +38,7 @@ macro_rules! to_primitive {
 	($expr:expr, $type:ident) => {
 		match $expr.$type() {
 			Some(primitive) => primitive,
-			None => return Err(CalcError::BitwiseTooLarge),
+			None => return Err(CalcError::TooLarge),
 		}
 	}
 }
@@ -46,7 +46,7 @@ macro_rules! to_primitive {
 pub fn calculate<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Result<BigInt, CalcError> {
 	let expr1 = calc_level2(tokens)?;
 
-	if tokens.peek() == Some(&Token::Xor) {
+	if let Some(&Token::Xor) = tokens.peek() {
 		tokens.next();
 		let expr2 = calculate(tokens)?;
 
@@ -62,7 +62,7 @@ pub fn calculate<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Result<
 pub fn calc_level2<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Result<BigInt, CalcError> {
 	let expr1 = calc_level3(tokens)?;
 
-	if tokens.peek() == Some(&Token::Or) {
+	if let Some(&Token::Or) = tokens.peek() {
 		tokens.next();
 		let expr2 = calc_level2(tokens)?;
 
@@ -78,7 +78,7 @@ pub fn calc_level2<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Resul
 pub fn calc_level3<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Result<BigInt, CalcError> {
 	let expr1 = calc_level4(tokens)?;
 
-	if tokens.peek() == Some(&Token::And) {
+	if let Some(&Token::And) = tokens.peek() {
 		tokens.next();
 		let expr2 = calc_level3(tokens)?;
 
@@ -94,7 +94,7 @@ pub fn calc_level3<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Resul
 pub fn calc_level4<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Result<BigInt, CalcError> {
 	let expr1 = calc_level5(tokens)?;
 
-	if tokens.peek() == Some(&Token::BitshiftLeft) {
+	if let Some(&Token::BitshiftLeft) = tokens.peek() {
 		tokens.next();
 		let expr2 = calc_level4(tokens)?;
 
@@ -102,7 +102,7 @@ pub fn calc_level4<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Resul
 		let primitive2 = to_primitive!(expr2, to_usize);
 
 		return Ok(expr1 << primitive2);
-	} else if tokens.peek() == Some(&Token::BitshiftRight) {
+	} else if let Some(&Token::BitshiftRight) = tokens.peek() {
 		tokens.next();
 		let expr2 = calc_level4(tokens)?;
 
@@ -117,12 +117,12 @@ pub fn calc_level4<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Resul
 pub fn calc_level5<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Result<BigInt, CalcError> {
 	let expr1 = calc_level6(tokens)?;
 
-	if tokens.peek() == Some(&Token::Add) {
+	if let Some(&Token::Add) = tokens.peek() {
 		tokens.next();
 		let expr2 = calc_level5(tokens)?;
 
 		return Ok(expr1 + expr2);
-	} else if tokens.peek() == Some(&Token::Sub) {
+	} else if let Some(&Token::Sub) = tokens.peek() {
 		tokens.next();
 		let expr2 = calc_level5(tokens)?;
 
@@ -134,12 +134,12 @@ pub fn calc_level5<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Resul
 fn calc_level6<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Result<BigInt, CalcError> {
 	let expr1 = calc_level7(tokens, None)?;
 
-	if tokens.peek() == Some(&Token::Mult) {
+	if let Some(&Token::Mult) = tokens.peek() {
 		tokens.next();
 		let expr2 = calc_level6(tokens)?;
 
 		return Ok(expr1 * expr2);
-	} else if tokens.peek() == Some(&Token::Div) {
+	} else if let Some(&Token::Div) = tokens.peek() {
 		tokens.next();
 		let expr2 = calc_level6(tokens)?;
 
@@ -149,7 +149,7 @@ fn calc_level6<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Result<Bi
 	Ok(expr1)
 }
 fn calc_level7<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>, name: Option<String>) -> Result<BigInt, CalcError> {
-	if tokens.peek() == Some(&Token::ParenOpen) {
+	if let Some(&Token::ParenOpen) = tokens.peek() {
 		tokens.next();
 		let mut args = vec![calculate(tokens)?];
 
@@ -157,7 +157,7 @@ fn calc_level7<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>, name: Option
 			tokens.next();
 			args.push(calculate(tokens)?);
 		}
-		if tokens.next() != Some(Token::ParenClose) {
+		if Some(Token::ParenClose) != tokens.next() {
 			return Err(CalcError::UnclosedParen);
 		}
 
@@ -172,6 +172,7 @@ fn calc_level7<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>, name: Option
 		if let Some(name) = name {
 			match &*name {
 				"abs" => {
+					usage!(1);
 					use num::Signed;
 					args[0] = args[0].abs();
 				},
@@ -181,7 +182,31 @@ fn calc_level7<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>, name: Option
 					let primitive1 = to_primitive!(args[0], to_i64);
 					let primitive2 = to_primitive!(args[1], to_u32);
 					args[0] = BigInt::from(primitive1.pow(primitive2));
-				}
+				},
+				"binary" => {
+					usage!(1);
+					use num::{Zero, One};
+					let (zero, one, ten) = (BigInt::zero(), BigInt::one(), BigInt::from(10));
+					let old = mem::replace(&mut args[0], zero.clone());
+
+					let mut i = 0;
+					let mut old_clone = old.clone();
+					while old_clone > zero {
+						old_clone = old_clone >> 1;
+						i += 1;
+					}
+					while old > zero {
+						let new = old.clone() >> i;
+						args[0] = args[0].clone() * ten.clone();
+						if new % 2 == one {
+							args[0] = args[0].clone() + one.clone();
+						}
+						if i == 0 {
+							break;
+						}
+						i -= 1;
+					}
+				},
 				_ => {
 					return Err(CalcError::UnknownFunction(name));
 				}
@@ -200,9 +225,30 @@ fn calc_level7<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>, name: Option
 		}
 	}
 
-	Ok(get_number(tokens)?)
+	Ok(calc_level8(tokens)?)
 }
-fn get_number<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Result<BigInt, CalcError> {
+fn calc_level8<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Result<BigInt, CalcError> {
+	if let Some(&Token::Not) = tokens.peek() {
+		tokens.next();
+		use num::ToPrimitive;
+		let expr = get_number(tokens)?;
+		let primitive = to_primitive!(expr, to_i64);
+
+		return Ok(BigInt::from(!primitive));
+	}
+
+	let expr = get_number(tokens)?;
+	if let Some(&Token::Factorial) = tokens.peek() {
+		return Ok(factorial(expr));
+	}
+	Ok(expr)
+}
+fn factorial(num: BigInt) -> BigInt {
+	use num::One;
+	let one = BigInt::one();
+	if num == one { one } else { num.clone() + factorial(num - 1) }
+}
+fn get_number<I: Iterator<Item = Token>>(tokens: &mut I) -> Result<BigInt, CalcError> {
 	if let Some(Token::Num(num)) = tokens.next() {
 		return Ok(num);
 	}

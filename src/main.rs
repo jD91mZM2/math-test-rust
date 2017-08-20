@@ -31,6 +31,9 @@ fn main() {
 				break;
 			},
 		};
+		if input.is_empty() {
+			continue;
+		}
 		rl.add_history_entry(&input);
 		calculate(&input);
 	}
@@ -39,6 +42,7 @@ fn main() {
 pub fn calculate(input: &str) {
 	match parser::parse(input) {
 		Ok(parsed) => match calculator::calculate(&mut parsed.into_iter().peekable()) {
+			// Ok(result) =>  println!("{} (Binary: {:b}) (Hex: {:X})", result, result, result),
 			Ok(result) =>  println!("{}", result),
 			Err(err)   => eprintln!("Error: {}", err)
 		},

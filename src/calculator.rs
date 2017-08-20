@@ -1,18 +1,23 @@
-use std::{self, fmt, mem};
+use std::{self, fmt};
+use std::iter::Peekable;
 use num::BigInt;
 use parser::Token;
 
 #[derive(Debug)]
 pub enum CalcError {
 	UnknownFunction(String),
+	IncorrectArguments(usize, usize),
 	BitwiseTooLarge,
-	InvalidSyntax
+	InvalidSyntax,
+	UnclosedParen
 }
 impl fmt::Display for CalcError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		use std::error::Error;
 		match *self {
 			CalcError::UnknownFunction(ref name) => write!(f, "Unknown function \"{}\"", name),
+			CalcError::IncorrectArguments(expected, received) =>
+				write!(f, "Incorrect amount of arguments (Expected {}, got {})", expected, received),
 			_ => write!(f, "{}", self.description())
 		}
 	}
@@ -21,115 +26,185 @@ impl std::error::Error for CalcError {
 	fn description(&self) -> &str {
 		match *self {
 			CalcError::UnknownFunction(_) => "Unknown function",
+			CalcError::IncorrectArguments(..) => "Incorrect amount of arguments!",
 			CalcError::BitwiseTooLarge => "You can only do bitwise operations on smaller numbers",
-			CalcError::InvalidSyntax => "Invalid syntax"
+			CalcError::InvalidSyntax => "Invalid syntax",
+			CalcError::UnclosedParen => "Unclosed parenthensis"
 		}
 	}
 }
 
-pub fn calculate(mut tokens: Vec<Token>) -> Result<BigInt, CalcError> {
-	for token in &mut tokens {
-		if let Token::Block(..) = *token {
-			// Kinda ugly. Necessary to check type before mem::replacing out of it...
-			if let Token::Block(name, tokens) = mem::replace(token, Token::Empty) {
-				let mut num = calculate(tokens)?;
+macro_rules! to_primitive {
+	($expr:expr, $type:ident) => {
+		match $expr.$type() {
+			Some(primitive) => primitive,
+			None => return Err(CalcError::BitwiseTooLarge),
+		}
+	}
+}
 
-				if let Some(name) = name {
+pub fn calculate<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Result<BigInt, CalcError> {
+	let expr1 = calc_level2(tokens)?;
+
+	if tokens.peek() == Some(&Token::Xor) {
+		tokens.next();
+		let expr2 = calculate(tokens)?;
+
+		use num::ToPrimitive;
+		let primitive1 = to_primitive!(expr1, to_i64);
+		let primitive2 = to_primitive!(expr2, to_i64);
+
+		return Ok(BigInt::from(primitive1 ^ primitive2));
+	}
+
+	Ok(expr1)
+}
+pub fn calc_level2<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Result<BigInt, CalcError> {
+	let expr1 = calc_level3(tokens)?;
+
+	if tokens.peek() == Some(&Token::Or) {
+		tokens.next();
+		let expr2 = calc_level2(tokens)?;
+
+		use num::ToPrimitive;
+		let primitive1 = to_primitive!(expr1, to_i64);
+		let primitive2 = to_primitive!(expr2, to_i64);
+
+		return Ok(BigInt::from(primitive1 | primitive2));
+	}
+
+	Ok(expr1)
+}
+pub fn calc_level3<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Result<BigInt, CalcError> {
+	let expr1 = calc_level4(tokens)?;
+
+	if tokens.peek() == Some(&Token::And) {
+		tokens.next();
+		let expr2 = calc_level3(tokens)?;
+
+		use num::ToPrimitive;
+		let primitive1 = to_primitive!(expr1, to_i64);
+		let primitive2 = to_primitive!(expr2, to_i64);
+
+		return Ok(BigInt::from(primitive1 & primitive2));
+	}
+
+	Ok(expr1)
+}
+pub fn calc_level4<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Result<BigInt, CalcError> {
+	let expr1 = calc_level5(tokens)?;
+
+	if tokens.peek() == Some(&Token::BitshiftLeft) {
+		tokens.next();
+		let expr2 = calc_level4(tokens)?;
+
+		use num::ToPrimitive;
+		let primitive2 = to_primitive!(expr2, to_usize);
+
+		return Ok(expr1 << primitive2);
+	} else if tokens.peek() == Some(&Token::BitshiftRight) {
+		tokens.next();
+		let expr2 = calc_level4(tokens)?;
+
+		use num::ToPrimitive;
+		let primitive2 = to_primitive!(expr2, to_usize);
+
+		return Ok(expr1 >> primitive2);
+	}
+
+	Ok(expr1)
+}
+pub fn calc_level5<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Result<BigInt, CalcError> {
+	let expr1 = calc_level6(tokens)?;
+
+	if tokens.peek() == Some(&Token::Add) {
+		tokens.next();
+		let expr2 = calc_level5(tokens)?;
+
+		return Ok(expr1 + expr2);
+	} else if tokens.peek() == Some(&Token::Sub) {
+		tokens.next();
+		let expr2 = calc_level5(tokens)?;
+
+		return Ok(expr1 - expr2);
+	}
+
+	Ok(expr1)
+}
+fn calc_level6<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Result<BigInt, CalcError> {
+	let expr1 = calc_level7(tokens, None)?;
+
+	if tokens.peek() == Some(&Token::Mult) {
+		tokens.next();
+		let expr2 = calc_level6(tokens)?;
+
+		return Ok(expr1 * expr2);
+	} else if tokens.peek() == Some(&Token::Div) {
+		tokens.next();
+		let expr2 = calc_level6(tokens)?;
+
+		return Ok(expr1 / expr2);
+	}
+
+	Ok(expr1)
+}
+fn calc_level7<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>, name: Option<String>) -> Result<BigInt, CalcError> {
+	if tokens.peek() == Some(&Token::ParenOpen) {
+		tokens.next();
+		let mut args = vec![calculate(tokens)?];
+
+		while let Some(&Token::Separator) = tokens.peek() {
+			tokens.next();
+			args.push(calculate(tokens)?);
+		}
+		if tokens.next() != Some(Token::ParenClose) {
+			return Err(CalcError::UnclosedParen);
+		}
+
+		macro_rules! usage {
+			($expected:expr) => {
+				if args.len() != $expected {
+					return Err(CalcError::IncorrectArguments($expected, args.len()));
+				}
+			}
+		}
+
+		if let Some(name) = name {
+			match &*name {
+				"abs" => {
 					use num::Signed;
-					match &*name {
-						"abs" => num = num.abs(),
-						_ => return Err(CalcError::UnknownFunction(name))
-					}
+					args[0] = args[0].abs();
+				},
+				"pow" => {
+					usage!(2);
+					use num::ToPrimitive;
+					let primitive1 = to_primitive!(args[0], to_i64);
+					let primitive2 = to_primitive!(args[1], to_u32);
+					args[0] = BigInt::from(primitive1.pow(primitive2));
 				}
+				_ => {
+					return Err(CalcError::UnknownFunction(name));
+				}
+			}
+		} else {
+			usage!(1);
+		}
 
-				*token = Token::Num(num);
+		return Ok(args.remove(0));
+	} else if name.is_none() {
+		if let Some(&Token::BlockName(_)) = tokens.peek() {
+			// Really ugly code, but we need to know the type *before* we walk out on it.
+			if let Some(Token::BlockName(name)) = tokens.next() {
+				return calc_level7(tokens, Some(name));
 			}
 		}
 	}
 
-	calculate_operators(&mut tokens, &[Token::Mult, Token::Div, Token::Mod])?;
-	calculate_operators(&mut tokens, &[Token::Add, Token::Sub])?;
-	calculate_operators(&mut tokens, &[Token::BitshiftLeft, Token::BitshiftRight])?;
-	calculate_operators(&mut tokens, &[Token::And])?;
-	calculate_operators(&mut tokens, &[Token::Xor])?;
-	calculate_operators(&mut tokens, &[Token::Or])?;
-
-	if let Some(Token::Num(num)) = tokens.pop() {
-		Ok(num)
-	} else {
-		Err(CalcError::InvalidSyntax)
-	}
+	Ok(get_number(tokens)?)
 }
-
-pub fn calculate_operators(tokens: &mut Vec<Token>, operators: &[Token]) -> Result<(), CalcError> {
-	if tokens.len() <= 2 {
-		return Ok(());
+fn get_number<I: Iterator<Item = Token>>(tokens: &mut Peekable<I>) -> Result<BigInt, CalcError> {
+	if let Some(Token::Num(num)) = tokens.next() {
+		return Ok(num);
 	}
-	for i in 0..(tokens.len() - 2) {
-		if !operators.contains(&tokens[i + 1]) {
-			continue;
-		}
-		match (&tokens[i], &tokens[i + 2]) {
-			(&Token::Num(_), &Token::Num(_)) => (),
-			_ => continue
-		}
-
-		let num1 = match mem::replace(&mut tokens[i], Token::Empty) {
-			Token::Num(num) => num,
-			_ => unreachable!()
-		};
-		let num2 = match mem::replace(&mut tokens[i + 2], Token::Empty) {
-			Token::Num(num) => num,
-			_ => unreachable!()
-		};
-
-		tokens[i + 1] = Token::Num(match tokens[i + 1] {
-			Token::Add  => num1 + num2,
-			Token::Sub  => num1 - num2,
-			Token::Mult => num1 * num2,
-			Token::Div  => num1 / num2,
-			Token::BitshiftLeft => {
-				use num::ToPrimitive;
-				let primitive2 = match num2.to_usize() {
-					Some(primitive) => primitive,
-					None => return Err(CalcError::BitwiseTooLarge)
-				};
-
-				num1 << primitive2
-			},
-			Token::BitshiftRight => {
-				use num::ToPrimitive;
-				let primitive2 = match num2.to_usize() {
-					Some(primitive) => primitive,
-					None => return Err(CalcError::BitwiseTooLarge)
-				};
-
-				num1 >> primitive2
-			},
-			_ => {
-				use num::ToPrimitive;
-				let primitive1 = match num1.to_i64() {
-					Some(primitive) => primitive,
-					None => return Err(CalcError::BitwiseTooLarge)
-				};
-				let primitive2 = match num2.to_i64() {
-					Some(primitive) => primitive,
-					None => return Err(CalcError::BitwiseTooLarge)
-				};
-
-				match tokens[i + 1] {
-					Token::And  => BigInt::from(primitive1 & primitive2),
-					Token::Or   => BigInt::from(primitive1 | primitive2),
-					Token::Xor  => BigInt::from(primitive1 ^ primitive2),
-					_ => unreachable!()
-				}
-			}
-		});
-
-		tokens.swap(i + 1, i + 2); // To move the real value towards AFTER the two empties.
-	}
-
-	tokens.retain(|item| *item != Token::Empty);
-
-	Ok(())
+	Err(CalcError::InvalidSyntax)
 }

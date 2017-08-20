@@ -38,10 +38,10 @@ fn main() {
 
 pub fn calculate(input: &str) {
 	match parser::parse(input) {
-		Ok(parsed) => match calculator::calculate(parsed) {
+		Ok(parsed) => match calculator::calculate(&mut parsed.into_iter().peekable()) {
 			Ok(result) =>  println!("{}", result),
-			Err(err)   => eprintln!("{}", err)
+			Err(err)   => eprintln!("Error: {}", err)
 		},
-		Err(err) => eprintln!("{}", err)
+		Err(err) => eprintln!("Error: {}", err)
 	}
 }

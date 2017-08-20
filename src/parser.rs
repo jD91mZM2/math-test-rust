@@ -3,7 +3,10 @@ use num::BigInt;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Token {
-	Empty,
+	BlockName(String),
+	ParenOpen,
+	Separator,
+	ParenClose,
 	Num(BigInt),
 	Add,
 	Sub,
@@ -15,15 +18,11 @@ pub enum Token {
 	Xor,
 	BitshiftLeft,
 	BitshiftRight,
-	Block(Option<String>, Vec<Token>)
 }
 
 #[derive(Debug)]
 pub enum ParseError {
 	NotANumber,
-	TooManyParens,
-	ErrUnclosed,
-	ErrUnmatched,
 	DisallowedChar(char),
 	UnclosedBitShift(char)
 }
@@ -42,9 +41,6 @@ impl std::error::Error for ParseError {
 	fn description(&self) -> &str {
 		match *self {
 			ParseError::NotANumber => "Not a number",
-			ParseError::TooManyParens => "Too many levels of parenthensis",
-			ParseError::ErrUnclosed => "Unclosed ( - No closing )",
-			ParseError::ErrUnmatched => "Unmatched ) -  No matching (",
 			ParseError::DisallowedChar(_) => "A character you used was not allowed",
 			ParseError::UnclosedBitShift(_) => "A < or > wasn't followed by another one, which is the way to bitshift"
 		}
@@ -55,26 +51,31 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 	let mut output = Vec::new();
 	let mut buffer = String::new();
 
+	macro_rules! join_minus {
+		($num:expr) => {
+			if output.last() == Some(&Token::Sub) {
+				match if output.len() >= 2 {
+						Some(&output[output.len() - 2])
+					} else {
+						None
+					} {
+					Some(&Token::Num(_)) => (),
+					Some(&Token::ParenClose) => (),
+					_ => {
+						output.pop();
+						$num = -$num;
+					}
+				}
+			}
+		}
+	}
 	macro_rules! flush {
 		() => {
 			if !buffer.is_empty() {
 				let mut num: BigInt = mem::replace(&mut buffer, String::new())
 											.parse()
 											.map_err(|_| ParseError::NotANumber)?;
-				if output.last() == Some(&Token::Sub) {
-					match if output.len() >= 2 {
-							Some(&output[output.len() - 2])
-						} else {
-							None
-						} {
-						Some(&Token::Num(_)) => (),
-						Some(&Token::Block(..)) => (),
-						_ => {
-							output.pop();
-							num = -num;
-						}
-					}
-				}
+				join_minus!(num);
 				output.push(Token::Num(num));
 			}
 		}
@@ -84,6 +85,8 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 	while let Some((i, c)) = chars.next() {
 		let token = match c {
 			' ' => continue,
+			',' => Some(Token::Separator),
+			')' => Some(Token::ParenClose),
 			'+' => Some(Token::Add),
 			'-' => Some(Token::Sub),
 			'*' => Some(Token::Mult),
@@ -111,47 +114,20 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 			flush!();
 			output.push(token);
 		} else if c == '(' {
-			let name = mem::replace(&mut buffer, String::new());
-			let name = match name.parse() {
-				Ok(num) => {
-					output.push(Token::Num(num));
-					output.push(Token::Mult);
-					None
-				},
-				Err(_) => {
-					if name.is_empty() {
-						None
-					} else {
-						Some(name)
+			if !buffer.is_empty() {
+				match buffer.parse::<BigInt>() {
+					Ok(mut num) => {
+						join_minus!(num);
+						output.push(Token::Num(num));
+						output.push(Token::Mult);
+					},
+					Err(_) => {
+						output.push(Token::BlockName(buffer));
 					}
-				}
-			};
-
-			let end;
-			let mut parens = 0u8;
-			loop {
-				if let Some((i, c)) = chars.next() {
-					if c == '(' {
-						match parens.checked_add(1) {
-							Some(new) => parens = new,
-							None => return Err(ParseError::TooManyParens),
-						}
-					} else if c == ')' {
-						if parens == 0 {
-							end = i;
-							break;
-						}
-
-						parens -= 1;
-					}
-				} else {
-					return Err(ParseError::ErrUnclosed)
-				}
+				};
+				buffer = String::new();
 			}
-
-			output.push(Token::Block(name, parse(&input[i+1..end])?));
-		} else if c == ')' {
-			return Err(ParseError::ErrUnmatched);
+			output.push(Token::ParenOpen);
 		} else {
 			let code = c as u32;
 			if (code < '0' as u32 || code > '9' as u32) &&

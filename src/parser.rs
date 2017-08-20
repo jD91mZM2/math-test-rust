@@ -7,8 +7,8 @@ pub enum Token {
 	ParenOpen,
 	Separator,
 	ParenClose,
-	VarName(String),
-	VarVal(String),
+	VarAssign(String),
+	VarGet(String),
 	Num(BigInt),
 	Add,
 	Sub,
@@ -22,6 +22,32 @@ pub enum Token {
 	BitshiftRight,
 	Not,
 	Factorial
+}
+
+impl fmt::Display for Token {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match *self {
+			Token::BlockName(ref name) => write!(f, "\"{}\"", name),
+			Token::ParenOpen => write!(f, "("),
+			Token::Separator => write!(f, ","),
+			Token::ParenClose => write!(f, ")"),
+			Token::VarAssign(ref name) => write!(f, "Variable assignment \"{}\"", name),
+			Token::VarGet(ref name) => write!(f, "Variable \"{}\"", name),
+			Token::Num(ref num) => write!(f, "Number {}", num),
+			Token::Add => write!(f, "Plus (+)"),
+			Token::Sub => write!(f, "Minus (-)"),
+			Token::Mult => write!(f, "Times (*)"),
+			Token::Div => write!(f, "Division symbol (/)"),
+			Token::Mod => write!(f, "Modulus (%)"),
+			Token::And => write!(f, "Bitwise AND (&)"),
+			Token::Or => write!(f, "Bitwise OR (|)"),
+			Token::Xor => write!(f, "Bitwise XOR (^)"),
+			Token::BitshiftLeft => write!(f, "Bitshift left (<<)"),
+			Token::BitshiftRight => write!(f, "Bitshift right (>>)"),
+			Token::Not => write!(f, "Bitwise NOT (~)"),
+			Token::Factorial => write!(f, "Factorial (!)")
+		}
+	}
 }
 
 #[derive(Debug)]
@@ -51,7 +77,7 @@ impl std::error::Error for ParseError {
 	}
 }
 
-pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
+pub fn parse(input: &str, radix: u32) -> Result<Vec<Token>, ParseError> {
 	let mut output = Vec::new();
 	let mut buffer = String::new();
 
@@ -66,7 +92,7 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 
 					Some(&Token::Num(_)) |
 					Some(&Token::ParenClose) |
-					Some(&Token::VarVal(_)) => (),
+					Some(&Token::VarGet(_)) => (),
 					_ => {
 						output.pop();
 						$num = -$num;
@@ -86,14 +112,15 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 		() => {
 			if !buffer.is_empty() {
 				let buffer = mem::replace(&mut buffer, String::new());
-				match buffer.parse::<BigInt>() {
+				use num::Num;
+				match BigInt::from_str_radix(&buffer, radix) {
 					Ok(mut num) => {
 						prepare_num!(num);
 						output.push(Token::Num(num));
 					},
 					Err(_) => {
 						prepare_var!();
-						output.push(Token::VarVal(buffer));
+						output.push(Token::VarGet(buffer));
 					}
 				}
 			}
@@ -136,7 +163,8 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 			output.push(token);
 		} else if c == '(' {
 			if !buffer.is_empty() {
-				match buffer.parse::<BigInt>() {
+				use num::Num;
+				match BigInt::from_str_radix(&buffer, radix) {
 					Ok(mut num) => {
 						prepare_num!(num);
 						output.push(Token::Num(num));
@@ -151,19 +179,19 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 			output.push(Token::ParenOpen);
 		} else if c == '=' {
 			let buffer = mem::replace(&mut buffer, String::new());
-			if buffer.is_empty() || buffer.chars().all(|c| c.is_digit(10)) {
+			if buffer.is_empty() || buffer.chars().all(|c| c.is_digit(radix)) {
 				return Err(ParseError::DisallowedVariable(buffer));
 			}
-			output.push(Token::VarName(buffer));
+			output.push(Token::VarAssign(buffer));
 		} else {
 			let code = c as u32;
-			let digit = code >= '0' as u32 && code <= '9' as u32;
+			let digit = c.is_digit(radix);
 			if digit ||
 				(code >= 'a' as u32 && code <= 'z' as u32) ||
 				(code >= 'A' as u32 && code <= 'Z' as u32) ||
 				c == '_' {
 
-				if !digit && buffer.chars().all(|c| c.is_digit(10)) {
+				if !digit && buffer.chars().all(|c| c.is_digit(radix)) {
 					flush!();
 				}
 				buffer.push(c);

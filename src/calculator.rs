@@ -9,6 +9,7 @@ pub enum CalcError {
 	UnknownFunction(String),
 	UnknownVariable(String),
 	IncorrectArguments(usize, usize),
+	ExpectedEOF(Token),
 	TooLarge,
 	InvalidSyntax,
 	UnclosedParen
@@ -22,6 +23,7 @@ impl fmt::Display for CalcError {
 			CalcError::UnknownVariable(ref name) => write!(f, "Unknown variable \"{}\"", name),
 			CalcError::IncorrectArguments(expected, received) =>
 				write!(f, "Incorrect amount of arguments (Expected {}, got {})", expected, received),
+			CalcError::ExpectedEOF(ref found) => write!(f, "Expected EOF, found {}", found),
 			_ => write!(f, "{}", self.description())
 		}
 	}
@@ -32,6 +34,7 @@ impl std::error::Error for CalcError {
 			CalcError::UnknownFunction(_) => "Unknown function",
 			CalcError::UnknownVariable(_) => "Unknown variable",
 			CalcError::IncorrectArguments(..) => "Incorrect amount of arguments!",
+			CalcError::ExpectedEOF(..) => "Expected EOF",
 			CalcError::TooLarge => "You can only do this operation on smaller numbers",
 			CalcError::InvalidSyntax => "Invalid syntax",
 			CalcError::UnclosedParen => "Unclosed parenthensis"
@@ -65,6 +68,10 @@ pub fn calculate<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<
 		let primitive2 = to_primitive!(expr2, to_i64);
 
 		return Ok(BigInt::from(primitive1 ^ primitive2));
+	}
+
+	if let Some(found) = context.tokens.next() {
+		return Err(CalcError::ExpectedEOF(found));
 	}
 
 	Ok(expr1)
@@ -261,12 +268,13 @@ fn factorial(num: BigInt) -> BigInt {
 fn get_number<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigInt, CalcError> {
 	match context.tokens.next() {
 		Some(Token::Num(num)) => Ok(num),
-		Some(Token::VarName(name)) => {
+		Some(Token::VarAssign(name)) => {
 			let val = calculate(context)?;
-			context.variables.insert(name, val.clone());
-			Ok(val)
+			context.variables.insert(name, val);
+			use num::Zero;
+			Ok(BigInt::zero())
 		},
-		Some(Token::VarVal(name)) => {
+		Some(Token::VarGet(name)) => {
 			Ok(
 				match context.variables.get(&name) {
 					Some(val) => val.clone(),

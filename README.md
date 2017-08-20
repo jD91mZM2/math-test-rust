@@ -5,11 +5,10 @@ I was bored, so I made some simple math parser and calculator.
 - [x] Arbitrary-length ("big") numbers. (Thanks to library)
 - [x] Negative numbers
 - [x] Orders of operations
-- [x] Function system
 - [x] Bitwise operators
-- [x] Multiple-argument functions
+- [x] Factorial
+- [x] Function system
 - [ ] Non-whole numbers (floats)
-- [ ] `~` bitwise operator
 - [ ] Actually implement some functions
 
 ----------------------------------

@@ -15,9 +15,10 @@ fn main() {
 	let mut variables = HashMap::new();
 	variables.insert("in".to_string(),  BigInt::from(10));
 	variables.insert("out".to_string(), BigInt::from(10));
+	let mut functions = HashMap::new();
 
 	for arg in env::args().skip(1) {
-		if let Some(output) = calculate(&arg, &mut variables) {
+		if let Some(output) = calculate(&arg, &mut variables, &mut functions) {
 			println!("{}", output);
 		}
 		terminate = true;
@@ -43,13 +44,17 @@ fn main() {
 			continue;
 		}
 		rl.add_history_entry(&input);
-		if let Some(output) = calculate(&input, &mut variables) {
+		if let Some(output) = calculate(&input, &mut variables, &mut functions) {
 			println!("= {}", output);
 		}
 	}
 }
 
-pub fn calculate(input: &str, variables: &mut HashMap<String, BigInt>) -> Option<String> {
+pub fn calculate(
+		input: &str,
+		variables: &mut HashMap<String, BigInt>,
+		functions: &mut HashMap<String, Vec<parser::Token>>
+	) -> Option<String> {
 	use num::ToPrimitive;
 	let radix = match variables.get("in").unwrap().to_u32() {
 		Some(radix) if radix >= 2 && radix <= 36 => radix,
@@ -66,8 +71,9 @@ pub fn calculate(input: &str, variables: &mut HashMap<String, BigInt>) -> Option
 		Ok(parsed) => {
 			match calculator::calculate(&mut calculator::Context {
 				tokens: parsed.into_iter().peekable(),
+				toplevel: true,
 				variables: variables,
-				toplevel: true
+				functions: functions
 			}) {
 				Ok(result) => {
 					use num::Zero;

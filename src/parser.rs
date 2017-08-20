@@ -1,7 +1,7 @@
 use std::{self, fmt, mem};
 use num::BigInt;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token {
 	BlockName(String),
 	ParenOpen,
@@ -189,7 +189,7 @@ pub fn parse(input: &str, radix: u32) -> Result<Vec<Token>, ParseError> {
 			if digit ||
 				(code >= 'a' as u32 && code <= 'z' as u32) ||
 				(code >= 'A' as u32 && code <= 'Z' as u32) ||
-				c == '_' {
+				(c == '_' || c == '$') {
 
 				if !digit && buffer.chars().all(|c| c.is_digit(radix)) {
 					flush!();

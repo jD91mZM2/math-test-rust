@@ -53,8 +53,9 @@ macro_rules! to_primitive {
 
 pub struct Context<'a, I: Iterator<Item = Token>> {
 	pub tokens: Peekable<I>,
-	pub variables: &'a mut HashMap<String, BigInt>,
 	pub toplevel: bool,
+	pub variables: &'a mut HashMap<String, BigInt>,
+	pub functions: &'a mut HashMap<String, Vec<Token>>
 }
 
 pub fn calculate<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigInt, CalcError> {
@@ -208,7 +209,29 @@ fn calc_level7<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option
 					args[0] = BigInt::from(primitive1.pow(primitive2));
 				},
 				_ => {
-					return Err(CalcError::UnknownFunction(name));
+					let tokens = match context.functions.get(&name) {
+						Some(tokens) => tokens.clone(),
+						None => return Err(CalcError::UnknownFunction(name))
+					};
+					let len = args.len();
+					for (i, arg) in args.into_iter().enumerate() {
+						let mut name = String::with_capacity(2);
+						name.push('$');
+						name.push_str(&(i + 1).to_string());
+						context.variables.insert(name, arg);
+					}
+					let val = calculate(&mut Context {
+						tokens: tokens.into_iter().peekable(),
+						toplevel: false,
+						variables: &mut context.variables,
+						functions: &mut context.functions
+					});
+					for i in 1..len+1 {
+						let mut name = String::with_capacity(2);
+						name.push('$');
+						name.push_str(&i.to_string());
+					}
+					return val;
 				}
 			}
 		} else {
@@ -252,8 +275,26 @@ fn get_number<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Big
 	match context.tokens.next() {
 		Some(Token::Num(num)) => Ok(num),
 		Some(Token::VarAssign(name)) => {
-			let val = calculate(context)?;
-			context.variables.insert(name, val);
+			if let Some(&Token::ParenOpen) = context.tokens.peek() {
+				context.tokens.next();
+				let mut fn_tokens = Vec::new();
+
+				loop {
+					let token = match context.tokens.next() {
+						Some(token) => token,
+						None => return Err(CalcError::UnclosedParen)
+					};
+					let exit = token == Token::ParenClose;
+					fn_tokens.push(token);
+
+					if exit { break; }
+				}
+
+				context.functions.insert(name, fn_tokens);
+			} else {
+				let val = calculate(context)?;
+				context.variables.insert(name, val);
+			}
 			use num::Zero;
 			Ok(BigInt::zero())
 		},

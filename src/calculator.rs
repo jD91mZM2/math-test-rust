@@ -72,7 +72,10 @@ pub fn calculate<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<
 	}
 
 	match context.tokens.peek() {
-		Some(&Token::ParenClose) if !context.toplevel => Ok(expr1),
+		Some(&Token::ParenClose) |
+		Some(&Token::Separator)
+		if !context.toplevel => Ok(expr1),
+
 		Some(_) => Err(CalcError::ExpectedEOF(context.tokens.next().unwrap())),
 		None => Ok(expr1)
 	}

@@ -1,10 +1,11 @@
+extern crate bigdecimal;
 extern crate num;
 extern crate rustyline;
 
 mod calculator;
 mod parser;
 
-use num::BigInt;
+use bigdecimal::BigDecimal;
 use rustyline::Editor;
 use rustyline::error::ReadlineError;
 use std::collections::HashMap;
@@ -13,8 +14,8 @@ use std::env;
 fn main() {
 	let mut terminate = false;
 	let mut variables = HashMap::new();
-	variables.insert("in".to_string(),  BigInt::from(10));
-	variables.insert("out".to_string(), BigInt::from(10));
+	variables.insert("in".to_string(),  BigDecimal::from(10));
+	variables.insert("out".to_string(), BigDecimal::from(10));
 	let mut functions = HashMap::new();
 
 	for arg in env::args().skip(1) {
@@ -52,7 +53,7 @@ fn main() {
 
 pub fn calculate(
 		input: &str,
-		variables: &mut HashMap<String, BigInt>,
+		variables: &mut HashMap<String, BigDecimal>,
 		functions: &mut HashMap<String, Vec<parser::Token>>
 	) -> Option<String> {
 	use num::ToPrimitive;
@@ -81,9 +82,9 @@ pub fn calculate(
 						return None;
 					}
 					match variables.get("out").unwrap().to_u8() {
-						Some(2)  => return Some(format!("{:b}", result)),
+						// Some(2)  => return Some(format!("{:b}", result)),
 						Some(10) => return Some(result.to_string()),
-						Some(16) => return Some(format!("{:X}", result)),
+						// Some(16) => return Some(format!("{:X}", result)),
 						_  => {
 							eprintln!("Warning: Unsupported \"out\" variable value");
 							return Some(result.to_string())

@@ -1,4 +1,4 @@
-use num::BigInt;
+use bigdecimal::BigDecimal;
 use parser::Token;
 use std::collections::HashMap;
 use std::iter::Peekable;
@@ -58,11 +58,11 @@ macro_rules! to_primitive {
 pub struct Context<'a, I: Iterator<Item = Token>> {
 	pub tokens: Peekable<I>,
 	pub toplevel: bool,
-	pub variables: &'a mut HashMap<String, BigInt>,
+	pub variables: &'a mut HashMap<String, BigDecimal>,
 	pub functions: &'a mut HashMap<String, Vec<Token>>
 }
 
-pub fn calculate<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigInt, CalcError> {
+pub fn calculate<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
 	let expr1 = calc_level2(context)?;
 
 	if let Some(&Token::Xor) = context.tokens.peek() {
@@ -73,7 +73,7 @@ pub fn calculate<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<
 		let primitive1 = to_primitive!(expr1, to_i64);
 		let primitive2 = to_primitive!(expr2, to_i64);
 
-		return Ok(BigInt::from(primitive1 ^ primitive2));
+		return Ok(BigDecimal::from(primitive1 ^ primitive2));
 	}
 
 	match context.tokens.peek() {
@@ -85,7 +85,7 @@ pub fn calculate<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<
 		None => Ok(expr1)
 	}
 }
-pub fn calc_level2<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigInt, CalcError> {
+pub fn calc_level2<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
 	let expr1 = calc_level3(context)?;
 
 	if let Some(&Token::Or) = context.tokens.peek() {
@@ -96,12 +96,12 @@ pub fn calc_level2<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Resul
 		let primitive1 = to_primitive!(expr1, to_i64);
 		let primitive2 = to_primitive!(expr2, to_i64);
 
-		return Ok(BigInt::from(primitive1 | primitive2));
+		return Ok(BigDecimal::from(primitive1 | primitive2));
 	}
 
 	Ok(expr1)
 }
-pub fn calc_level3<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigInt, CalcError> {
+pub fn calc_level3<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
 	let expr1 = calc_level4(context)?;
 
 	if let Some(&Token::And) = context.tokens.peek() {
@@ -112,12 +112,12 @@ pub fn calc_level3<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Resul
 		let primitive1 = to_primitive!(expr1, to_i64);
 		let primitive2 = to_primitive!(expr2, to_i64);
 
-		return Ok(BigInt::from(primitive1 & primitive2));
+		return Ok(BigDecimal::from(primitive1 & primitive2));
 	}
 
 	Ok(expr1)
 }
-pub fn calc_level4<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigInt, CalcError> {
+pub fn calc_level4<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
 	let expr1 = calc_level5(context)?;
 
 	if let Some(&Token::BitshiftLeft) = context.tokens.peek() {
@@ -127,7 +127,8 @@ pub fn calc_level4<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Resul
 		use num::ToPrimitive;
 		let primitive2 = to_primitive!(expr2, to_usize);
 
-		return Ok(expr1 << primitive2);
+		use num::bigint::ToBigInt;
+		return Ok(BigDecimal::new(expr1.to_bigint().unwrap() << primitive2, 0));
 	} else if let Some(&Token::BitshiftRight) = context.tokens.peek() {
 		context.tokens.next();
 		let expr2 = calc_level4(context)?;
@@ -135,12 +136,13 @@ pub fn calc_level4<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Resul
 		use num::ToPrimitive;
 		let primitive2 = to_primitive!(expr2, to_usize);
 
-		return Ok(expr1 >> primitive2);
+		use num::bigint::ToBigInt;
+		return Ok(BigDecimal::new(expr1.to_bigint().unwrap() >> primitive2, 0));
 	}
 
 	Ok(expr1)
 }
-pub fn calc_level5<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigInt, CalcError> {
+pub fn calc_level5<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
 	let expr1 = calc_level6(context)?;
 
 	if let Some(&Token::Add) = context.tokens.peek() {
@@ -157,7 +159,7 @@ pub fn calc_level5<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Resul
 
 	Ok(expr1)
 }
-fn calc_level6<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigInt, CalcError> {
+fn calc_level6<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
 	let expr1 = calc_level7(context, None)?;
 
 	if let Some(&Token::Mult) = context.tokens.peek() {
@@ -174,7 +176,7 @@ fn calc_level6<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
 
 	Ok(expr1)
 }
-fn calc_level7<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option<String>) -> Result<BigInt, CalcError> {
+fn calc_level7<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option<String>) -> Result<BigDecimal, CalcError> {
 	if let Some(&Token::ParenOpen) = context.tokens.peek() {
 		context.tokens.next();
 		let toplevel = mem::replace(&mut context.toplevel, false);
@@ -210,7 +212,7 @@ fn calc_level7<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option
 					use num::ToPrimitive;
 					let primitive1 = to_primitive!(args[0], to_i64);
 					let primitive2 = to_primitive!(args[1], to_u32);
-					args[0] = BigInt::from(primitive1.pow(primitive2));
+					args[0] = BigDecimal::from(primitive1.pow(primitive2));
 				},
 				_ => {
 					let tokens = match context.functions.get(&name) {
@@ -254,14 +256,14 @@ fn calc_level7<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option
 
 	Ok(calc_level8(context)?)
 }
-fn calc_level8<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigInt, CalcError> {
+fn calc_level8<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
 	if let Some(&Token::Not) = context.tokens.peek() {
 		context.tokens.next();
 		use num::ToPrimitive;
 		let expr = get_number(context)?;
 		let primitive = to_primitive!(expr, to_i64);
 
-		return Ok(BigInt::from(!primitive));
+		return Ok(BigDecimal::from(!primitive));
 	}
 
 	let expr = get_number(context)?;
@@ -270,12 +272,12 @@ fn calc_level8<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
 	}
 	Ok(expr)
 }
-fn factorial(num: BigInt) -> BigInt {
+fn factorial(num: BigDecimal) -> BigDecimal {
 	use num::One;
-	let one = BigInt::one();
-	if num == one { one } else { num.clone() + factorial(num - 1) }
+	let one = BigDecimal::one();
+	if num == one { one } else { num.clone() + factorial(num - one) }
 }
-fn get_number<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigInt, CalcError> {
+fn get_number<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
 	match context.tokens.next() {
 		Some(Token::Num(num)) => Ok(num),
 		Some(Token::VarAssign(name)) => {
@@ -304,7 +306,7 @@ fn get_number<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Big
 				context.variables.insert(name, val);
 			}
 			use num::Zero;
-			Ok(BigInt::zero())
+			Ok(BigDecimal::zero())
 		},
 		Some(Token::VarGet(name)) => {
 			Ok(

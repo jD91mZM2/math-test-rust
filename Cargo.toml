@@ -7,3 +7,4 @@ license = "MIT"
 [dependencies]
 num = "0.1"
 rustyline = "1.0"
+bigdecimal = "0.0"

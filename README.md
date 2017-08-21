@@ -2,13 +2,13 @@
 
 I was bored, so I made some simple math parser and calculator.
 
-- [x] Arbitrary-length ("big") numbers. (Thanks to library)
+- [x] Arbitrary-length ("big") numbers. (Thanks to library "num")
+- [x] Non-whole numbers. (Thanks to library "bigdecimal-rs")
 - [x] Negative numbers
 - [x] Orders of operations
 - [x] Bitwise operators
 - [x] Factorial
 - [x] Function system
-- [ ] Non-whole numbers (floats)
 - [ ] Actually implement some functions
 
 ----------------------------------

@@ -1,5 +1,5 @@
 use std::{self, fmt, mem};
-use num::BigInt;
+use bigdecimal::BigDecimal;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token {
@@ -9,7 +9,7 @@ pub enum Token {
 	ParenClose,
 	VarAssign(String),
 	VarGet(String),
-	Num(BigInt),
+	Num(BigDecimal),
 	Add,
 	Sub,
 	Mult,
@@ -113,7 +113,7 @@ pub fn parse(input: &str, radix: u32) -> Result<Vec<Token>, ParseError> {
 			if !buffer.is_empty() {
 				let buffer = mem::replace(&mut buffer, String::new());
 				use num::Num;
-				match BigInt::from_str_radix(&buffer, radix) {
+				match BigDecimal::from_str_radix(&buffer, radix) {
 					Ok(mut num) => {
 						prepare_num!(num);
 						output.push(Token::Num(num));
@@ -164,7 +164,7 @@ pub fn parse(input: &str, radix: u32) -> Result<Vec<Token>, ParseError> {
 		} else if c == '(' {
 			if !buffer.is_empty() {
 				use num::Num;
-				match BigInt::from_str_radix(&buffer, radix) {
+				match BigDecimal::from_str_radix(&buffer, radix) {
 					Ok(mut num) => {
 						prepare_num!(num);
 						output.push(Token::Num(num));
@@ -185,13 +185,13 @@ pub fn parse(input: &str, radix: u32) -> Result<Vec<Token>, ParseError> {
 			output.push(Token::VarAssign(buffer));
 		} else {
 			let code = c as u32;
-			let digit = c.is_digit(radix);
+			let digit = c.is_digit(radix) || c == '.';
 			if digit ||
 				(code >= 'a' as u32 && code <= 'z' as u32) ||
 				(code >= 'A' as u32 && code <= 'Z' as u32) ||
 				(c == '_' || c == '$') {
 
-				if !digit && buffer.chars().all(|c| c.is_digit(radix)) {
+				if !digit && buffer.chars().all(|c| c.is_digit(radix) || c == '.') {
 					flush!();
 				}
 				buffer.push(c);

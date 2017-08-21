@@ -12,14 +12,16 @@ pub enum CalcError {
 	ExpectedEOF(Token),
 	TooLarge,
 	InvalidSyntax,
-	UnclosedParen
+	UnclosedParen,
+	SeparatorInDef,
+	ReadOnly
 }
 impl fmt::Display for CalcError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		use std::error::Error;
 		match *self {
 			CalcError::UnknownFunction(ref name) => write!(f, "Unknown function \"{}\"\n\
-															Hint: Cannot assume multiplication because of ambiguity.", name),
+												Hint: Cannot assume multiplication of variables because of ambiguity", name),
 			CalcError::UnknownVariable(ref name) => write!(f, "Unknown variable \"{}\"", name),
 			CalcError::IncorrectArguments(expected, received) =>
 				write!(f, "Incorrect amount of arguments (Expected {}, got {})", expected, received),
@@ -33,11 +35,13 @@ impl std::error::Error for CalcError {
 		match *self {
 			CalcError::UnknownFunction(_) => "Unknown function",
 			CalcError::UnknownVariable(_) => "Unknown variable",
-			CalcError::IncorrectArguments(..) => "Incorrect amount of arguments!",
+			CalcError::IncorrectArguments(..) => "Incorrect amount of arguments",
 			CalcError::ExpectedEOF(..) => "Expected EOF",
 			CalcError::TooLarge => "You can only do this operation on smaller numbers",
 			CalcError::InvalidSyntax => "Invalid syntax",
-			CalcError::UnclosedParen => "Unclosed parenthensis"
+			CalcError::UnclosedParen => "Unclosed parenthensis",
+			CalcError::SeparatorInDef => "A function definition cannot have multiple arguments",
+			CalcError::ReadOnly => "You may not write to that variable"
 		}
 	}
 }
@@ -275,12 +279,16 @@ fn get_number<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Big
 	match context.tokens.next() {
 		Some(Token::Num(num)) => Ok(num),
 		Some(Token::VarAssign(name)) => {
+			if name.starts_with('$') {
+				return Err(CalcError::ReadOnly);
+			}
 			if let Some(&Token::ParenOpen) = context.tokens.peek() {
 				context.tokens.next();
 				let mut fn_tokens = Vec::new();
 
 				loop {
 					let token = match context.tokens.next() {
+						Some(Token::Separator) => return Err(CalcError::SeparatorInDef),
 						Some(token) => token,
 						None => return Err(CalcError::UnclosedParen)
 					};

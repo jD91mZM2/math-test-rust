@@ -13,8 +13,7 @@ pub enum CalcError {
 	TooLarge,
 	InvalidSyntax,
 	UnclosedParen,
-	SeparatorInDef,
-	ReadOnly
+	SeparatorInDef
 }
 impl fmt::Display for CalcError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -40,8 +39,7 @@ impl std::error::Error for CalcError {
 			CalcError::TooLarge => "You can only do this operation on smaller numbers",
 			CalcError::InvalidSyntax => "Invalid syntax",
 			CalcError::UnclosedParen => "Unclosed parenthensis",
-			CalcError::SeparatorInDef => "A function definition cannot have multiple arguments",
-			CalcError::ReadOnly => "You may not write to that variable"
+			CalcError::SeparatorInDef => "A function definition cannot have multiple arguments"
 		}
 	}
 }
@@ -281,9 +279,6 @@ fn get_number<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Big
 	match context.tokens.next() {
 		Some(Token::Num(num)) => Ok(num),
 		Some(Token::VarAssign(name)) => {
-			if name.starts_with('$') {
-				return Err(CalcError::ReadOnly);
-			}
 			if let Some(&Token::ParenOpen) = context.tokens.peek() {
 				context.tokens.next();
 				let mut fn_tokens = Vec::new();

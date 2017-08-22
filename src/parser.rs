@@ -179,7 +179,7 @@ pub fn parse(input: &str, radix: u32) -> Result<Vec<Token>, ParseError> {
 			output.push(Token::ParenOpen);
 		} else if c == '=' {
 			let buffer = mem::replace(&mut buffer, String::new());
-			if buffer.is_empty() || buffer.chars().all(|c| c.is_digit(radix)) {
+			if buffer.is_empty() || buffer.chars().all(|c| c.is_digit(radix)) || buffer.starts_with('$') {
 				return Err(ParseError::DisallowedVariable(buffer));
 			}
 			output.push(Token::VarAssign(buffer));

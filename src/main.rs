@@ -78,13 +78,14 @@ pub fn calculate(
 			}) {
 				Ok(result) => {
 					use num::Zero;
+					use num::bigint::ToBigInt;
 					if result.is_zero() {
 						return None;
 					}
 					match variables.get("out").unwrap().to_u8() {
-						// Some(2)  => return Some(format!("{:b}", result)),
+						Some(2)  => return Some(format!("{:b}", result.to_bigint().unwrap())),
 						Some(10) => return Some(result.to_string()),
-						// Some(16) => return Some(format!("{:X}", result)),
+						Some(16) => return Some(format!("{:X}", result.to_bigint().unwrap())),
 						_  => {
 							eprintln!("Warning: Unsupported \"out\" variable value");
 							return Some(result.to_string())

@@ -6,25 +6,25 @@ use std::{self, fmt, mem};
 
 #[derive(Debug)]
 pub enum CalcError {
-	UnknownFunction(String),
-	UnknownVariable(String),
-	IncorrectArguments(usize, usize),
 	ExpectedEOF(Token),
-	TooLarge,
+	IncorrectArguments(usize, usize),
 	InvalidSyntax,
+	SeparatorInDef,
+	TooLarge,
 	UnclosedParen,
-	SeparatorInDef
+	UnknownFunction(String),
+	UnknownVariable(String)
 }
 impl fmt::Display for CalcError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		use std::error::Error;
 		match *self {
-			CalcError::UnknownFunction(ref name) => write!(f, "Unknown function \"{}\"\n\
-												Hint: Cannot assume multiplication of variables because of ambiguity", name),
-			CalcError::UnknownVariable(ref name) => write!(f, "Unknown variable \"{}\"", name),
+			CalcError::ExpectedEOF(ref found) => write!(f, "Expected EOF, found {}", found),
 			CalcError::IncorrectArguments(expected, received) =>
 				write!(f, "Incorrect amount of arguments (Expected {}, got {})", expected, received),
-			CalcError::ExpectedEOF(ref found) => write!(f, "Expected EOF, found {}", found),
+			CalcError::UnknownFunction(ref name) =>
+				write!(f, "Unknown function \"{}\"\nHint: Cannot assume multiplication of variables because of ambiguity", name),
+			CalcError::UnknownVariable(ref name) => write!(f, "Unknown variable \"{}\"", name),
 			_ => write!(f, "{}", self.description())
 		}
 	}
@@ -32,14 +32,14 @@ impl fmt::Display for CalcError {
 impl std::error::Error for CalcError {
 	fn description(&self) -> &str {
 		match *self {
-			CalcError::UnknownFunction(_) => "Unknown function",
-			CalcError::UnknownVariable(_) => "Unknown variable",
-			CalcError::IncorrectArguments(..) => "Incorrect amount of arguments",
 			CalcError::ExpectedEOF(..) => "Expected EOF",
-			CalcError::TooLarge => "You can only do this operation on smaller numbers",
+			CalcError::IncorrectArguments(..) => "Incorrect amount of arguments",
 			CalcError::InvalidSyntax => "Invalid syntax",
+			CalcError::SeparatorInDef => "A function definition cannot have multiple arguments",
+			CalcError::TooLarge => "You can only do this operation on smaller numbers",
 			CalcError::UnclosedParen => "Unclosed parenthensis",
-			CalcError::SeparatorInDef => "A function definition cannot have multiple arguments"
+			CalcError::UnknownFunction(_) => "Unknown function",
+			CalcError::UnknownVariable(_) => "Unknown variable"
 		}
 	}
 }

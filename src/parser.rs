@@ -53,17 +53,20 @@ impl fmt::Display for Token {
 #[derive(Debug)]
 pub enum ParseError {
 	DisallowedChar(char),
-	UnclosedBitShift(char),
-	DisallowedVariable(String)
+	DisallowedDecimal,
+	DisallowedVariable(String),
+	UnclosedBitShift(char)
 }
 impl fmt::Display for ParseError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		use std::error::Error;
 		match *self {
 			ParseError::DisallowedChar(c) => write!(f, "Character '{}' neither a number nor a valid letter \
 														in a function or variable name.", c),
 			ParseError::UnclosedBitShift(c) => write!(f, "Character '{}' isn't followed by another '{}'.\n\
 														  Looks like a failed attempt to bitshift.", c, c),
 			ParseError::DisallowedVariable(ref var) => write!(f, "\"{}\" is not a valid variable name.", var),
+			_ => write!(f, "{}", self.description())
 		}
 	}
 }
@@ -71,8 +74,9 @@ impl std::error::Error for ParseError {
 	fn description(&self) -> &str {
 		match *self {
 			ParseError::DisallowedChar(_) => "A character you used was not allowed",
-			ParseError::UnclosedBitShift(_) => "A < or > wasn't followed by another one, which is the way to bitshift",
-			ParseError::DisallowedVariable(_) => "Not a valid variable name."
+			ParseError::DisallowedDecimal => "You may only use whole numbers in this context",
+			ParseError::DisallowedVariable(_) => "Not a valid variable name.",
+			ParseError::UnclosedBitShift(_) => "A < or > wasn't followed by another one, which is the way to bitshift"
 		}
 	}
 }
@@ -193,15 +197,17 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 				(code >= 'A' as u32 && code <= 'Z' as u32) ||
 				(c == '_' || c == '$') {
 
-				if !num && was_num && buffer != "0x" && buffer != "0b" {;
+				if was_num && !num && buffer != "0x" && buffer != "0b" {;
 					buffer.drain(old_len..);
 					flush!();
 					buffer.push(c);
 				}
 			} else {
-				// Undo pushing
+				if c == '.' {
+					return Err(ParseError::DisallowedDecimal);
+				}
 				buffer.drain(old_len..);
-				return Err(ParseError::DisallowedChar(c))
+				return Err(ParseError::DisallowedChar(c));
 			}
 		}
 	}
@@ -230,5 +236,5 @@ fn is_num(mut num: &str) -> bool {
 		num = &num[2..];
 		radix = 2;
 	}
-	!num.is_empty() && num.chars().all(|c| c.is_digit(radix) || c == '.')
+	!num.is_empty() && num.chars().all(|c| c.is_digit(radix) || (radix == 10 && c == '.'))
 }

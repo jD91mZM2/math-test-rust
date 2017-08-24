@@ -181,7 +181,7 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 			output.push(Token::ParenOpen);
 		} else if c == '=' {
 			let buffer = mem::replace(&mut buffer, String::new());
-			if buffer.is_empty() || is_num(&buffer) || buffer.starts_with('$') {
+			if buffer.is_empty() || is_num(&buffer) || buffer.starts_with('$') || buffer.starts_with('0') {
 				return Err(ParseError::DisallowedVariable(buffer));
 			}
 			output.push(Token::VarAssign(buffer));
@@ -195,9 +195,10 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 			if num ||
 				(code >= 'a' as u32 && code <= 'z' as u32) ||
 				(code >= 'A' as u32 && code <= 'Z' as u32) ||
+				(code >= '0' as u32 && code <= '9' as u32) ||
 				(c == '_' || c == '$') {
 
-				if was_num && !num && !is_num_prefix(&buffer) {;
+				if was_num && !num && !buffer.starts_with('0') {
 					buffer.drain(old_len..);
 					flush!();
 					buffer.push(c);
@@ -229,20 +230,21 @@ fn parse_num(num: &str) -> Result<BigDecimal, ::bigdecimal::ParseBigDecimalError
 
 	num.parse()
 }
-fn is_num_prefix(prefix: &str) -> bool {
-	prefix == "0x" || prefix == "0o" || prefix == "0b"
-}
 fn is_num(mut num: &str) -> bool {
-	let mut radix = 10;
-	if num.starts_with("0x") {
+	let radix = if num.len() < 2 {
+		10
+	} else {
+		match &num[..2] {
+			"0x" => 16,
+			"0o" => 8,
+			"0b" => 2,
+			_ => 10
+		}
+	};
+
+	if radix != 10 {
 		num = &num[2..];
-		radix = 16;
-	} else if num.starts_with("0o") {
-		num = &num[2..];
-		radix = 8;
-	} else if num.starts_with("0b") {
-		num = &num[2..];
-		radix = 2;
 	}
+
 	!num.is_empty() && num.chars().all(|c| c.is_digit(radix) || (radix == 10 && c == '.'))
 }

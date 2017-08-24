@@ -112,8 +112,7 @@ pub fn parse(input: &str, radix: u32) -> Result<Vec<Token>, ParseError> {
 		() => {
 			if !buffer.is_empty() {
 				let buffer = mem::replace(&mut buffer, String::new());
-				use num::Num;
-				match BigDecimal::from_str_radix(&buffer, radix) {
+				match parse_num(&buffer, radix) {
 					Ok(mut num) => {
 						prepare_num!(num);
 						output.push(Token::Num(num));
@@ -163,8 +162,7 @@ pub fn parse(input: &str, radix: u32) -> Result<Vec<Token>, ParseError> {
 			output.push(token);
 		} else if c == '(' {
 			if !buffer.is_empty() {
-				use num::Num;
-				match BigDecimal::from_str_radix(&buffer, radix) {
+				match parse_num(&buffer, radix) {
 					Ok(mut num) => {
 						prepare_num!(num);
 						output.push(Token::Num(num));
@@ -179,19 +177,19 @@ pub fn parse(input: &str, radix: u32) -> Result<Vec<Token>, ParseError> {
 			output.push(Token::ParenOpen);
 		} else if c == '=' {
 			let buffer = mem::replace(&mut buffer, String::new());
-			if buffer.is_empty() || buffer.chars().all(|c| c.is_digit(radix)) || buffer.starts_with('$') {
+			if buffer.is_empty() || buffer.chars().all(|c| is_digit(c, radix)) || buffer.starts_with('$') {
 				return Err(ParseError::DisallowedVariable(buffer));
 			}
 			output.push(Token::VarAssign(buffer));
 		} else {
 			let code = c as u32;
-			let digit = c.is_digit(radix) || c == '.';
+			let digit = is_digit(c, radix);
 			if digit ||
 				(code >= 'a' as u32 && code <= 'z' as u32) ||
 				(code >= 'A' as u32 && code <= 'Z' as u32) ||
 				(c == '_' || c == '$') {
 
-				if !digit && buffer.chars().all(|c| c.is_digit(radix) || c == '.') {
+				if !digit && buffer.chars().all(|c| is_digit(c, radix)) {
 					flush!();
 				}
 				buffer.push(c);
@@ -204,4 +202,19 @@ pub fn parse(input: &str, radix: u32) -> Result<Vec<Token>, ParseError> {
 	flush!();
 
 	Ok(output)
+}
+
+fn parse_num(num: &str, radix: u32) -> Result<BigDecimal, ::bigdecimal::ParseBigDecimalError> {
+	use num::{BigInt, Num};
+	match BigDecimal::from_str_radix(num, radix) {
+		Ok(num) => {
+			Ok(num)
+		},
+		Err(_) => {
+			Ok(BigDecimal::new(BigInt::from_str_radix(num, radix)?, 0))
+		}
+	}
+}
+fn is_digit(c: char, radix: u32) -> bool {
+	c.is_digit(radix) || (radix == 10 && c == '.')
 }

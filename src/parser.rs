@@ -77,7 +77,7 @@ impl std::error::Error for ParseError {
 	}
 }
 
-pub fn parse(input: &str, radix: u32) -> Result<Vec<Token>, ParseError> {
+pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 	let mut output = Vec::new();
 	let mut buffer = String::new();
 
@@ -112,7 +112,7 @@ pub fn parse(input: &str, radix: u32) -> Result<Vec<Token>, ParseError> {
 		() => {
 			if !buffer.is_empty() {
 				let buffer = mem::replace(&mut buffer, String::new());
-				match parse_num(&buffer, radix) {
+				match parse_num(&buffer) {
 					Ok(mut num) => {
 						prepare_num!(num);
 						output.push(Token::Num(num));
@@ -162,7 +162,7 @@ pub fn parse(input: &str, radix: u32) -> Result<Vec<Token>, ParseError> {
 			output.push(token);
 		} else if c == '(' {
 			if !buffer.is_empty() {
-				match parse_num(&buffer, radix) {
+				match parse_num(&buffer) {
 					Ok(mut num) => {
 						prepare_num!(num);
 						output.push(Token::Num(num));
@@ -177,23 +177,30 @@ pub fn parse(input: &str, radix: u32) -> Result<Vec<Token>, ParseError> {
 			output.push(Token::ParenOpen);
 		} else if c == '=' {
 			let buffer = mem::replace(&mut buffer, String::new());
-			if buffer.is_empty() || buffer.chars().all(|c| is_digit(c, radix)) || buffer.starts_with('$') {
+			if buffer.is_empty() || is_num(&buffer) || buffer.starts_with('$') {
 				return Err(ParseError::DisallowedVariable(buffer));
 			}
 			output.push(Token::VarAssign(buffer));
 		} else {
 			let code = c as u32;
-			let digit = is_digit(c, radix);
-			if digit ||
+			let was_num = is_num(&buffer);
+			let old_len = buffer.len();
+
+			buffer.push(c);
+			let num = is_num(&buffer);
+			if num ||
 				(code >= 'a' as u32 && code <= 'z' as u32) ||
 				(code >= 'A' as u32 && code <= 'Z' as u32) ||
 				(c == '_' || c == '$') {
 
-				if !digit && buffer.chars().all(|c| is_digit(c, radix)) {
+				if !num && was_num && buffer != "0x" && buffer != "0b" {;
+					buffer.drain(old_len..);
 					flush!();
+					buffer.push(c);
 				}
-				buffer.push(c);
 			} else {
+				// Undo pushing
+				buffer.drain(old_len..);
 				return Err(ParseError::DisallowedChar(c))
 			}
 		}
@@ -204,17 +211,24 @@ pub fn parse(input: &str, radix: u32) -> Result<Vec<Token>, ParseError> {
 	Ok(output)
 }
 
-fn parse_num(num: &str, radix: u32) -> Result<BigDecimal, ::bigdecimal::ParseBigDecimalError> {
+fn parse_num(num: &str) -> Result<BigDecimal, ::bigdecimal::ParseBigDecimalError> {
 	use num::{BigInt, Num};
-	match BigDecimal::from_str_radix(num, radix) {
-		Ok(num) => {
-			Ok(num)
-		},
-		Err(_) => {
-			Ok(BigDecimal::new(BigInt::from_str_radix(num, radix)?, 0))
-		}
+	if num.starts_with("0x") {
+		return Ok(BigDecimal::new(BigInt::from_str_radix(&num[2..], 16)?, 0));
+	} else if num.starts_with("0b") {
+		return Ok(BigDecimal::new(BigInt::from_str_radix(&num[2..], 2)?, 0));
 	}
+
+	num.parse()
 }
-fn is_digit(c: char, radix: u32) -> bool {
-	c.is_digit(radix) || (radix == 10 && c == '.')
+fn is_num(mut num: &str) -> bool {
+	let mut radix = 10;
+	if num.starts_with("0x") {
+		num = &num[2..];
+		radix = 16;
+	} else if num.starts_with("0b") {
+		num = &num[2..];
+		radix = 2;
+	}
+	!num.is_empty() && num.chars().all(|c| c.is_digit(radix) || c == '.')
 }

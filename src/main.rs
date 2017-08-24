@@ -14,7 +14,6 @@ use std::env;
 fn main() {
 	let mut terminate = false;
 	let mut variables = HashMap::new();
-	variables.insert("in".to_string(),  BigDecimal::from(10));
 	variables.insert("out".to_string(), BigDecimal::from(10));
 	let mut functions = HashMap::new();
 
@@ -57,18 +56,7 @@ pub fn calculate(
 		functions: &mut HashMap<String, Vec<parser::Token>>
 	) -> Option<String> {
 	use num::ToPrimitive;
-	let radix = match variables.get("in").unwrap().to_u32() {
-		Some(radix) if radix >= 2 && radix <= 36 => radix,
-		Some(_) => {
-			eprintln!("Warning: \"in\" must be between 2 and 36.");
-			10
-		},
-		None => {
-			eprintln!("Warning: Unsupported \"in\" variable value");
-			10
-		}
-	};
-	match parser::parse(input, radix) {
+	match parser::parse(input) {
 		Ok(parsed) => {
 			match calculator::calculate(&mut calculator::Context {
 				tokens: parsed.into_iter().peekable(),

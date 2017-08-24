@@ -6,6 +6,7 @@ use std::{self, fmt, mem};
 
 #[derive(Debug)]
 pub enum CalcError {
+	DivideByZero,
 	ExpectedEOF(Token),
 	IncorrectArguments(usize, usize),
 	InvalidSyntax,
@@ -32,6 +33,7 @@ impl fmt::Display for CalcError {
 impl std::error::Error for CalcError {
 	fn description(&self) -> &str {
 		match *self {
+			CalcError::DivideByZero => "Cannot divide by zero",
 			CalcError::ExpectedEOF(..) => "Expected EOF",
 			CalcError::IncorrectArguments(..) => "Incorrect amount of arguments",
 			CalcError::InvalidSyntax => "Invalid syntax",
@@ -168,6 +170,11 @@ fn calc_level6<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
 	} else if let Some(&Token::Div) = context.tokens.peek() {
 		context.tokens.next();
 		let expr2 = calc_level6(context)?;
+
+		use num::Zero;
+		if expr2.is_zero() {
+			return Err(CalcError::DivideByZero);
+		}
 
 		return Ok(expr1 / expr2);
 	}

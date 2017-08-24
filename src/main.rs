@@ -72,6 +72,7 @@ pub fn calculate(
 					}
 					match variables.get("out").unwrap().to_u8() {
 						Some(2)  => return Some(format!("{:b}", result.to_bigint().unwrap())),
+						Some(8)  => return Some(format!("{:o}", result.to_bigint().unwrap())),
 						Some(10) => return Some(result.to_string()),
 						Some(16) => return Some(format!("{:X}", result.to_bigint().unwrap())),
 						_  => {

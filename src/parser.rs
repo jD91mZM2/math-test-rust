@@ -197,7 +197,7 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 				(code >= 'A' as u32 && code <= 'Z' as u32) ||
 				(c == '_' || c == '$') {
 
-				if was_num && !num && buffer != "0x" && buffer != "0b" {;
+				if was_num && !num && !is_num_prefix(&buffer) {;
 					buffer.drain(old_len..);
 					flush!();
 					buffer.push(c);
@@ -221,17 +221,25 @@ fn parse_num(num: &str) -> Result<BigDecimal, ::bigdecimal::ParseBigDecimalError
 	use num::{BigInt, Num};
 	if num.starts_with("0x") {
 		return Ok(BigDecimal::new(BigInt::from_str_radix(&num[2..], 16)?, 0));
+	} else if num.starts_with("0o") {
+		return Ok(BigDecimal::new(BigInt::from_str_radix(&num[2..], 8)?, 0));
 	} else if num.starts_with("0b") {
 		return Ok(BigDecimal::new(BigInt::from_str_radix(&num[2..], 2)?, 0));
 	}
 
 	num.parse()
 }
+fn is_num_prefix(prefix: &str) -> bool {
+	prefix == "0x" || prefix == "0o" || prefix == "0b"
+}
 fn is_num(mut num: &str) -> bool {
 	let mut radix = 10;
 	if num.starts_with("0x") {
 		num = &num[2..];
 		radix = 16;
+	} else if num.starts_with("0o") {
+		num = &num[2..];
+		radix = 8;
 	} else if num.starts_with("0b") {
 		num = &num[2..];
 		radix = 2;

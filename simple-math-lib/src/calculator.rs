@@ -194,7 +194,7 @@ fn calc_level5<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
 fn calc_level6<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
 	let expr1 = calc_level7(context)?;
 
-	if let Some(&Token::Mult) = context.tokens.peek() {
+	if let Some(&Token::Mul) = context.tokens.peek() {
 		context.tokens.next();
 		let expr2 = calc_level6(context)?;
 
@@ -218,7 +218,7 @@ fn calc_level7<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
 	if let Some(&Token::Factorial) = context.tokens.peek() {
 		context.tokens.next();
 
-		return factorial(expr);
+		return factorial(expr, None);
 	}
 	Ok(expr)
 }
@@ -268,7 +268,7 @@ fn calc_level9<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option
 				"pow" => {
 					usage!(2);
 					use num::Zero;
-					args[0] = pow(mem::replace(&mut args[0], BigDecimal::zero()), args.remove(1))?;
+					args[0] = pow(mem::replace(&mut args[0], BigDecimal::zero()), args.remove(1), None)?;
 				},
 				_ => {
 					let tokens = match context.functions.get(&name) {
@@ -369,33 +369,49 @@ fn require_positive(num: &BigDecimal) -> Result<(), CalcError> {
 	}
 }
 /// Calculates the factorial of `num`
-pub fn factorial(num: BigDecimal) -> Result<BigDecimal, CalcError> {
+pub fn factorial(num: BigDecimal, result: Option<BigDecimal>) -> Result<BigDecimal, CalcError> {
 	require_whole(&num)?;
 	require_positive(&num)?;
 
 	use num::{Zero, One};
 	if num.is_zero() {
-		Ok(BigDecimal::one())
+		Ok(result.unwrap_or_else(BigDecimal::one))
 	} else {
-		Ok(num.clone() * factorial(num - BigDecimal::one())?)
+		let result = result.unwrap_or_else(BigDecimal::one);
+		let result = Some(result * &num);
+		// Y THIS NO TAILCALL OPTIMIZE
+		factorial(num - BigDecimal::one(), result)
 	}
 }
 /// Calculates `num` to the power of `power`
-pub fn pow(num: BigDecimal, power: BigDecimal) -> Result<BigDecimal, CalcError> {
+pub fn pow(num: BigDecimal, power: BigDecimal, result: Option<BigDecimal>) -> Result<BigDecimal, CalcError> {
 	require_positive(&num)?;
 	require_whole(&power)?;
 
 	use num::{Zero, One};
 	let one = BigDecimal::one();
 	if power.is_zero() {
-		Ok(one)
+		Ok(result.unwrap_or(one))
 	} else if power == one {
-		Ok(num)
+		Ok(result.unwrap_or_else(|| num.clone()))
 	} else {
 		match power.sign() {
 			Sign::NoSign => unreachable!(),
-			Sign::Plus => Ok(num.clone() * pow(num, power - one)?),
-			Sign::Minus => Ok(pow(num.clone(), power + one)? / num)
+			Sign::Plus => {
+				let result = result.unwrap_or_else(|| num.clone());
+				let result = Some(result * &num);
+				// Y THIS NO TAILCALL OPTIMIZE
+				pow(num, power - one, result)
+			},
+			Sign::Minus => {
+				// `let power = ...` is kinda ugly, but I need it to happen BEFORE
+				// the reference dies to avoid cloning.
+				let power = power + &one;
+				let result = result.unwrap_or(one);
+				let result = Some(result / &num);
+				// Y THIS NO TAILCALL OPTIMIZE
+				pow(num, power, result)
+			}
 		}
 	}
 }

@@ -14,7 +14,7 @@ pub enum Token {
 	Num(BigDecimal),
 	Add,
 	Sub,
-	Mult,
+	Mul,
 	Div,
 	Mod,
 	And,
@@ -38,7 +38,7 @@ impl fmt::Display for Token {
 			Token::Num(ref num) => write!(f, "Number {}", num),
 			Token::Add => write!(f, "Plus (+)"),
 			Token::Sub => write!(f, "Minus (-)"),
-			Token::Mult => write!(f, "Times (*)"),
+			Token::Mul => write!(f, "Times (*)"),
 			Token::Div => write!(f, "Division symbol (/)"),
 			Token::Mod => write!(f, "Modulus (%)"),
 			Token::And => write!(f, "Bitwise AND (&)"),
@@ -98,7 +98,7 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 	macro_rules! prepare_var {
 		() => {
 			if let Some(&Token::Num(_)) = output.last() {
-				output.push(Token::Mult);
+				output.push(Token::Mul);
 			}
 		}
 	}
@@ -127,7 +127,7 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 			')' => Some(Token::ParenClose),
 			'+' => Some(Token::Add),
 			'-' => Some(Token::Sub),
-			'*' => Some(Token::Mult),
+			'*' => Some(Token::Mul),
 			'/' => Some(Token::Div),
 			'%' => Some(Token::Mod),
 			'&' => Some(Token::And),
@@ -158,7 +158,7 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 				match parse_num(&buffer) {
 					Ok(num) => {
 						output.push(Token::Num(num));
-						output.push(Token::Mult);
+						output.push(Token::Mul);
 					},
 					Err(_) => {
 						output.push(Token::BlockName(buffer));

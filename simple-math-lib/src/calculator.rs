@@ -382,9 +382,8 @@ pub fn factorial(num: BigDecimal) -> Result<BigDecimal, CalcError> {
 }
 /// Calculates `num` to the power of `power`
 pub fn pow(num: BigDecimal, power: BigDecimal) -> Result<BigDecimal, CalcError> {
-	require_whole(&num)?;
-	require_whole(&power)?;
 	require_positive(&num)?;
+	require_whole(&power)?;
 
 	use num::{Zero, One};
 	let one = BigDecimal::one();

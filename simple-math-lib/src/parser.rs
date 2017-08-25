@@ -1,6 +1,8 @@
-use std::{self, fmt, mem};
 use bigdecimal::BigDecimal;
+use calculator::CalcError;
+use std::{self, fmt, mem};
 
+/// A token
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token {
 	BlockName(String),
@@ -50,6 +52,7 @@ impl fmt::Display for Token {
 	}
 }
 
+/// An error when parsing
 #[derive(Debug)]
 pub enum ParseError {
 	DisallowedChar(char),
@@ -80,7 +83,14 @@ impl std::error::Error for ParseError {
 		}
 	}
 }
+impl Into<CalcError> for ParseError {
+	fn into(self) -> CalcError {
+		CalcError::ParseError(self)
+	}
+}
 
+/// "Parse" the string into a list of tokens.
+/// This is technically actually a tokenizer...
 pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 	let mut output = Vec::new();
 	let mut buffer = String::new();

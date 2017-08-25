@@ -1,13 +1,12 @@
 extern crate bigdecimal;
 extern crate num;
 extern crate rustyline;
-
-mod calculator;
-mod parser;
+extern crate simple_math_lib;
 
 use bigdecimal::BigDecimal;
 use rustyline::Editor;
 use rustyline::error::ReadlineError;
+use simple_math_lib::*;
 use std::collections::HashMap;
 use std::env;
 
@@ -56,32 +55,22 @@ pub fn calculate(
 		functions: &mut HashMap<String, Vec<parser::Token>>
 	) -> Option<String> {
 	use num::ToPrimitive;
-	match parser::parse(input) {
-		Ok(parsed) => {
-			match calculator::calculate(&mut calculator::Context {
-				tokens: parsed.into_iter().peekable(),
-				toplevel: true,
-				variables: variables,
-				functions: functions
-			}) {
-				Ok(result) => {
-					use num::Zero;
-					use num::bigint::ToBigInt;
-					if result.is_zero() {
-						return None;
-					}
-					match variables.get("out").unwrap().to_u8() {
-						Some(2)  => return Some(format!("{:b}", result.to_bigint().unwrap())),
-						Some(8)  => return Some(format!("{:o}", result.to_bigint().unwrap())),
-						Some(10) => return Some(result.to_string()),
-						Some(16) => return Some(format!("{:X}", result.to_bigint().unwrap())),
-						_  => {
-							eprintln!("Warning: Unsupported \"out\" variable value");
-							return Some(result.to_string())
-						},
-					}
-				}
-				Err(err) => eprintln!("Error: {}", err)
+	match parse_and_calc(input, variables, functions) {
+		Ok(result) => {
+			use num::Zero;
+			use num::bigint::ToBigInt;
+			if result.is_zero() {
+				return None;
+			}
+			match variables.get("out").unwrap().to_u8() {
+				Some(2)  => return Some(format!("{:b}", result.to_bigint().unwrap())),
+				Some(8)  => return Some(format!("{:o}", result.to_bigint().unwrap())),
+				Some(10) => return Some(result.to_string()),
+				Some(16) => return Some(format!("{:X}", result.to_bigint().unwrap())),
+				_  => {
+					eprintln!("Warning: Unsupported \"out\" variable value");
+					return Some(result.to_string())
+				},
 			}
 		},
 		Err(err) => eprintln!("Error: {}", err)

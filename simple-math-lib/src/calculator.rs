@@ -1,15 +1,17 @@
 use bigdecimal::BigDecimal;
-use parser::Token;
+use parser::{Token, ParseError};
 use std::collections::HashMap;
 use std::iter::Peekable;
 use std::{self, fmt, mem};
 
+/// An error when calculating
 #[derive(Debug)]
 pub enum CalcError {
 	DivideByZero,
 	ExpectedEOF(Token),
 	IncorrectArguments(usize, usize),
 	InvalidSyntax,
+	ParseError(ParseError),
 	SeparatorInDef,
 	TooLarge,
 	UnclosedParen,
@@ -23,6 +25,7 @@ impl fmt::Display for CalcError {
 			CalcError::ExpectedEOF(ref found) => write!(f, "Expected EOF, found {}", found),
 			CalcError::IncorrectArguments(expected, received) =>
 				write!(f, "Incorrect amount of arguments (Expected {}, got {})", expected, received),
+			CalcError::ParseError(ref error) => write!(f, "{}", error),
 			CalcError::UnknownFunction(ref name) =>
 				write!(f, "Unknown function \"{}\"\nHint: Cannot assume multiplication of variables because of ambiguity", name),
 			CalcError::UnknownVariable(ref name) => write!(f, "Unknown variable \"{}\"", name),
@@ -34,9 +37,10 @@ impl std::error::Error for CalcError {
 	fn description(&self) -> &str {
 		match *self {
 			CalcError::DivideByZero => "Cannot divide by zero",
-			CalcError::ExpectedEOF(..) => "Expected EOF",
+			CalcError::ExpectedEOF(_) => "Expected EOF",
 			CalcError::IncorrectArguments(..) => "Incorrect amount of arguments",
 			CalcError::InvalidSyntax => "Invalid syntax",
+			CalcError::ParseError(ref error)  => error.description(),
 			CalcError::SeparatorInDef => "A function definition cannot have multiple arguments",
 			CalcError::TooLarge => "You can only do this operation on smaller numbers",
 			CalcError::UnclosedParen => "Unclosed parenthensis",
@@ -55,13 +59,18 @@ macro_rules! to_primitive {
 	}
 }
 
+/// A Context for `calculate` to pass around to all its sub-functions
 pub struct Context<'a, I: Iterator<Item = Token>> {
+	/// The tokens gotten by the parser
 	pub tokens: Peekable<I>,
-	pub toplevel: bool,
+	toplevel: bool,
+	/// A reference to a map of variables
 	pub variables: &'a mut HashMap<String, BigDecimal>,
+	/// A reference to a map of functions
 	pub functions: &'a mut HashMap<String, Vec<Token>>
 }
 
+/// Calculates the result in a recursive descent fashion
 pub fn calculate<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
 	let expr1 = calc_level2(context)?;
 
@@ -85,7 +94,7 @@ pub fn calculate<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<
 		None => Ok(expr1)
 	}
 }
-pub fn calc_level2<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
+fn calc_level2<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
 	let expr1 = calc_level3(context)?;
 
 	if let Some(&Token::Or) = context.tokens.peek() {
@@ -101,7 +110,7 @@ pub fn calc_level2<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Resul
 
 	Ok(expr1)
 }
-pub fn calc_level3<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
+fn calc_level3<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
 	let expr1 = calc_level4(context)?;
 
 	if let Some(&Token::And) = context.tokens.peek() {
@@ -117,7 +126,7 @@ pub fn calc_level3<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Resul
 
 	Ok(expr1)
 }
-pub fn calc_level4<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
+fn calc_level4<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
 	let expr1 = calc_level5(context)?;
 
 	if let Some(&Token::BitshiftLeft) = context.tokens.peek() {
@@ -142,7 +151,7 @@ pub fn calc_level4<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Resul
 
 	Ok(expr1)
 }
-pub fn calc_level5<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
+fn calc_level5<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
 	let expr1 = calc_level6(context)?;
 
 	if let Some(&Token::Add) = context.tokens.peek() {
@@ -252,7 +261,7 @@ fn calc_level7<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option
 		return Ok(args.remove(0));
 	} else if name.is_none() {
 		if let Some(&Token::BlockName(_)) = context.tokens.peek() {
-			// Really ugly code, but we need to know the type *before* we walk out on it.
+			// Really ugly code, but we need to know the type *before* we walk out on it
 			if let Some(Token::BlockName(name)) = context.tokens.next() {
 				return calc_level7(context, Some(name));
 			}

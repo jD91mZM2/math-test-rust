@@ -192,7 +192,7 @@ fn calc_level5<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
 	Ok(expr1)
 }
 fn calc_level6<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
-	let expr1 = calc_level7(context, None)?;
+	let expr1 = calc_level7(context)?;
 
 	if let Some(&Token::Mult) = context.tokens.peek() {
 		context.tokens.next();
@@ -213,7 +213,28 @@ fn calc_level6<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
 
 	Ok(expr1)
 }
-fn calc_level7<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option<String>) -> Result<BigDecimal, CalcError> {
+fn calc_level7<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
+	let expr = calc_level8(context)?;
+	if let Some(&Token::Factorial) = context.tokens.peek() {
+		context.tokens.next();
+
+		return factorial(expr);
+	}
+	Ok(expr)
+}
+fn calc_level8<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
+	if let Some(&Token::Not) = context.tokens.peek() {
+		context.tokens.next();
+		use num::ToPrimitive;
+		let expr = calc_level8(context)?;
+		let primitive = to_primitive!(expr, to_i64, "i64");
+
+		return Ok(BigDecimal::from(!primitive));
+	}
+
+	Ok(calc_level9(context, None)?)
+}
+fn calc_level9<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option<String>) -> Result<BigDecimal, CalcError> {
 	if let Some(&Token::ParenOpen) = context.tokens.peek() {
 		context.tokens.next();
 		let toplevel = mem::replace(&mut context.toplevel, false);
@@ -284,30 +305,12 @@ fn calc_level7<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option
 		if let Some(&Token::BlockName(_)) = context.tokens.peek() {
 			// Really ugly code, but we need to know the type *before* we walk out on it
 			if let Some(Token::BlockName(name)) = context.tokens.next() {
-				return calc_level7(context, Some(name));
+				return calc_level9(context, Some(name));
 			}
 		}
 	}
 
-	Ok(calc_level8(context)?)
-}
-fn calc_level8<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
-	if let Some(&Token::Not) = context.tokens.peek() {
-		context.tokens.next();
-		use num::ToPrimitive;
-		let expr = get_number(context)?;
-		let primitive = to_primitive!(expr, to_i64, "i64");
-
-		return Ok(BigDecimal::from(!primitive));
-	}
-
-	let expr = get_number(context)?;
-	if let Some(&Token::Factorial) = context.tokens.peek() {
-		context.tokens.next();
-
-		return factorial(expr);
-	}
-	Ok(expr)
+	Ok(get_number(context)?)
 }
 fn require_whole(num: &BigDecimal) -> Result<(), CalcError> {
 	if num.with_scale(0) == *num {

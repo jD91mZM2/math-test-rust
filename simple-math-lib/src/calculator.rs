@@ -1,4 +1,5 @@
 use bigdecimal::BigDecimal;
+use num::bigint::Sign;
 use parser::{Token, ParseError};
 use std::collections::HashMap;
 use std::iter::Peekable;
@@ -11,9 +12,11 @@ pub enum CalcError {
 	ExpectedEOF(Token),
 	IncorrectArguments(usize, usize),
 	InvalidSyntax,
+	NotAPositive,
+	NotAPrimitive(&'static str),
+	NotAWhole,
 	ParseError(ParseError),
 	SeparatorInDef,
-	TooLarge,
 	UnclosedParen,
 	UnknownFunction(String),
 	UnknownVariable(String)
@@ -25,6 +28,7 @@ impl fmt::Display for CalcError {
 			CalcError::ExpectedEOF(ref found) => write!(f, "Expected EOF, found {}", found),
 			CalcError::IncorrectArguments(expected, received) =>
 				write!(f, "Incorrect amount of arguments (Expected {}, got {})", expected, received),
+			CalcError::NotAPrimitive(primitive) => write!(f, "Must fit in the range of an {} primitive", primitive),
 			CalcError::ParseError(ref error) => write!(f, "{}", error),
 			CalcError::UnknownFunction(ref name) =>
 				write!(f, "Unknown function \"{}\"\nHint: Cannot assume multiplication of variables because of ambiguity", name),
@@ -42,7 +46,9 @@ impl std::error::Error for CalcError {
 			CalcError::InvalidSyntax => "Invalid syntax",
 			CalcError::ParseError(ref error)  => error.description(),
 			CalcError::SeparatorInDef => "A function definition cannot have multiple arguments",
-			CalcError::TooLarge => "You can only do this operation on smaller numbers",
+			CalcError::NotAPositive => "You may only do this on positive numbers",
+			CalcError::NotAPrimitive(_) => "You may only do this on a specific primitive types",
+			CalcError::NotAWhole => "You may only do this on whole numbers",
 			CalcError::UnclosedParen => "Unclosed parenthensis",
 			CalcError::UnknownFunction(_) => "Unknown function",
 			CalcError::UnknownVariable(_) => "Unknown variable"
@@ -51,10 +57,10 @@ impl std::error::Error for CalcError {
 }
 
 macro_rules! to_primitive {
-	($expr:expr, $type:ident) => {
+	($expr:expr, $type:ident, $primitive:expr) => {
 		match $expr.$type() {
 			Some(primitive) => primitive,
-			None => return Err(CalcError::TooLarge)
+			None => return Err(CalcError::NotAPrimitive($primitive))
 		}
 	}
 }
@@ -95,8 +101,8 @@ pub fn calculate<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<
 		let expr2 = calculate(context)?;
 
 		use num::ToPrimitive;
-		let primitive1 = to_primitive!(expr1, to_i64);
-		let primitive2 = to_primitive!(expr2, to_i64);
+		let primitive1 = to_primitive!(expr1, to_i64, "i64");
+		let primitive2 = to_primitive!(expr2, to_i64, "i64");
 
 		return Ok(BigDecimal::from(primitive1 ^ primitive2));
 	}
@@ -118,8 +124,8 @@ fn calc_level2<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
 		let expr2 = calc_level2(context)?;
 
 		use num::ToPrimitive;
-		let primitive1 = to_primitive!(expr1, to_i64);
-		let primitive2 = to_primitive!(expr2, to_i64);
+		let primitive1 = to_primitive!(expr1, to_i64, "i64");
+		let primitive2 = to_primitive!(expr2, to_i64, "i64");
 
 		return Ok(BigDecimal::from(primitive1 | primitive2));
 	}
@@ -134,8 +140,8 @@ fn calc_level3<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
 		let expr2 = calc_level3(context)?;
 
 		use num::ToPrimitive;
-		let primitive1 = to_primitive!(expr1, to_i64);
-		let primitive2 = to_primitive!(expr2, to_i64);
+		let primitive1 = to_primitive!(expr1, to_i64, "i64");
+		let primitive2 = to_primitive!(expr2, to_i64, "i64");
 
 		return Ok(BigDecimal::from(primitive1 & primitive2));
 	}
@@ -145,23 +151,24 @@ fn calc_level3<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
 fn calc_level4<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
 	let expr1 = calc_level5(context)?;
 
+	use num::bigint::ToBigInt;
 	if let Some(&Token::BitshiftLeft) = context.tokens.peek() {
 		context.tokens.next();
 		let expr2 = calc_level4(context)?;
 
 		use num::ToPrimitive;
-		let primitive2 = to_primitive!(expr2, to_usize);
+		let primitive2 = to_primitive!(expr2, to_usize, "usize");
 
-		use num::bigint::ToBigInt;
+		require_whole(&expr1)?;
 		return Ok(BigDecimal::new(expr1.to_bigint().unwrap() << primitive2, 0));
 	} else if let Some(&Token::BitshiftRight) = context.tokens.peek() {
 		context.tokens.next();
 		let expr2 = calc_level4(context)?;
 
 		use num::ToPrimitive;
-		let primitive2 = to_primitive!(expr2, to_usize);
+		let primitive2 = to_primitive!(expr2, to_usize, "usize");
 
-		use num::bigint::ToBigInt;
+		require_whole(&expr1)?;
 		return Ok(BigDecimal::new(expr1.to_bigint().unwrap() >> primitive2, 0));
 	}
 
@@ -239,10 +246,8 @@ fn calc_level7<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option
 				},
 				"pow" => {
 					usage!(2);
-					use num::ToPrimitive;
-					let primitive1 = to_primitive!(args[0], to_i64);
-					let primitive2 = to_primitive!(args[1], to_u32);
-					args[0] = BigDecimal::from(primitive1.pow(primitive2));
+					use num::Zero;
+					args[0] = pow(mem::replace(&mut args[0], BigDecimal::zero()), args.remove(1))?;
 				},
 				_ => {
 					let tokens = match context.functions.get(&name) {
@@ -291,21 +296,64 @@ fn calc_level8<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
 		context.tokens.next();
 		use num::ToPrimitive;
 		let expr = get_number(context)?;
-		let primitive = to_primitive!(expr, to_i64);
+		let primitive = to_primitive!(expr, to_i64, "i64");
 
 		return Ok(BigDecimal::from(!primitive));
 	}
 
 	let expr = get_number(context)?;
 	if let Some(&Token::Factorial) = context.tokens.peek() {
-		return Ok(factorial(expr));
+		context.tokens.next();
+
+		return factorial(expr);
 	}
 	Ok(expr)
 }
-fn factorial(num: BigDecimal) -> BigDecimal {
-	use num::One;
+fn require_whole(num: &BigDecimal) -> Result<(), CalcError> {
+	if num.with_scale(0) == *num {
+		Ok(())
+	} else {
+		Err(CalcError::NotAWhole)
+	}
+}
+fn require_positive(num: &BigDecimal) -> Result<(), CalcError> {
+	match num.sign() {
+		Sign::NoSign |
+		Sign::Plus => Ok(()),
+		Sign::Minus => Err(CalcError::NotAPositive)
+	}
+}
+/// Calculates the factorial of `num`
+pub fn factorial(num: BigDecimal) -> Result<BigDecimal, CalcError> {
+	require_whole(&num)?;
+	require_positive(&num)?;
+
+	use num::{Zero, One};
+	if num.is_zero() {
+		Ok(BigDecimal::one())
+	} else {
+		Ok(num.clone() * factorial(num - BigDecimal::one())?)
+	}
+}
+/// Calculates `num` to the power of `power`
+pub fn pow(num: BigDecimal, power: BigDecimal) -> Result<BigDecimal, CalcError> {
+	require_whole(&num)?;
+	require_whole(&power)?;
+	require_positive(&num)?;
+
+	use num::{Zero, One};
 	let one = BigDecimal::one();
-	if num == one { one } else { num.clone() + factorial(num - one) }
+	if power.is_zero() {
+		Ok(one)
+	} else if power == one {
+		Ok(num)
+	} else {
+		match power.sign() {
+			Sign::NoSign => unreachable!(),
+			Sign::Plus => Ok(num.clone() * pow(num, power - one)?),
+			Sign::Minus => Ok(pow(num.clone(), power + one)? / num)
+		}
+	}
 }
 fn get_number<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
 	match context.tokens.next() {

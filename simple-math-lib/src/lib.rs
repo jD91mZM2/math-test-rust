@@ -16,11 +16,10 @@ pub fn parse_and_calc(
 	) -> Result<BigDecimal, calculator::CalcError> {
 
 	parser::parse(input).map_err(|err| err.into()).and_then(|parsed| {
-		calculator::calculate(&mut calculator::Context {
-			tokens: parsed.into_iter().peekable(),
-			toplevel: true,
-			variables: variables,
-			functions: functions
-		})
+		calculator::calculate(&mut calculator::Context::new(
+			parsed.into_iter().peekable(),
+			variables,
+			functions
+		))
 	})
 }

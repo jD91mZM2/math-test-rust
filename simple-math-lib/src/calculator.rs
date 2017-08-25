@@ -61,13 +61,29 @@ macro_rules! to_primitive {
 
 /// A Context for `calculate` to pass around to all its sub-functions
 pub struct Context<'a, I: Iterator<Item = Token>> {
+	toplevel: bool,
+
 	/// The tokens gotten by the parser
 	pub tokens: Peekable<I>,
-	toplevel: bool,
 	/// A reference to a map of variables
 	pub variables: &'a mut HashMap<String, BigDecimal>,
 	/// A reference to a map of functions
 	pub functions: &'a mut HashMap<String, Vec<Token>>
+}
+impl<'a, I: Iterator<Item = Token>> Context<'a, I> {
+	pub fn new(
+		tokens: Peekable<I>,
+		variables: &'a mut HashMap<String, BigDecimal>,
+		functions: &'a mut HashMap<String, Vec<Token>>
+		) -> Context<'a, I> {
+
+		Context {
+			toplevel: true,
+			tokens: tokens,
+			variables: variables,
+			functions: functions
+		}
+	}
 }
 
 /// Calculates the result in a recursive descent fashion

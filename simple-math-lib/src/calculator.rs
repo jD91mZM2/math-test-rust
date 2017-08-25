@@ -312,6 +312,48 @@ fn calc_level9<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option
 
 	Ok(get_number(context)?)
 }
+fn get_number<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
+	match context.tokens.next() {
+		Some(Token::Num(num)) => Ok(num),
+		Some(Token::Sub) => {
+			Ok(-calc_level9(context, None)?)
+		},
+		Some(Token::VarAssign(name)) => {
+			if let Some(&Token::ParenOpen) = context.tokens.peek() {
+				context.tokens.next();
+				let mut fn_tokens = Vec::new();
+
+				loop {
+					let token = match context.tokens.next() {
+						Some(Token::Separator) => return Err(CalcError::SeparatorInDef),
+						Some(token) => token,
+						None => return Err(CalcError::UnclosedParen)
+					};
+					let exit = token == Token::ParenClose;
+					fn_tokens.push(token);
+
+					if exit { break; }
+				}
+
+				context.functions.insert(name, fn_tokens);
+			} else {
+				let val = calculate(context)?;
+				context.variables.insert(name, val);
+			}
+			use num::Zero;
+			Ok(BigDecimal::zero())
+		},
+		Some(Token::VarGet(name)) => {
+			Ok(
+				match context.variables.get(&name) {
+					Some(val) => val.clone(),
+					None => return Err(CalcError::UnknownVariable(name))
+				}
+			)
+		},
+		_ => Err(CalcError::InvalidSyntax)
+	}
+}
 fn require_whole(num: &BigDecimal) -> Result<(), CalcError> {
 	if num.with_scale(0) == *num {
 		Ok(())
@@ -356,44 +398,5 @@ pub fn pow(num: BigDecimal, power: BigDecimal) -> Result<BigDecimal, CalcError> 
 			Sign::Plus => Ok(num.clone() * pow(num, power - one)?),
 			Sign::Minus => Ok(pow(num.clone(), power + one)? / num)
 		}
-	}
-}
-fn get_number<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
-	match context.tokens.next() {
-		Some(Token::Num(num)) => Ok(num),
-		Some(Token::VarAssign(name)) => {
-			if let Some(&Token::ParenOpen) = context.tokens.peek() {
-				context.tokens.next();
-				let mut fn_tokens = Vec::new();
-
-				loop {
-					let token = match context.tokens.next() {
-						Some(Token::Separator) => return Err(CalcError::SeparatorInDef),
-						Some(token) => token,
-						None => return Err(CalcError::UnclosedParen)
-					};
-					let exit = token == Token::ParenClose;
-					fn_tokens.push(token);
-
-					if exit { break; }
-				}
-
-				context.functions.insert(name, fn_tokens);
-			} else {
-				let val = calculate(context)?;
-				context.variables.insert(name, val);
-			}
-			use num::Zero;
-			Ok(BigDecimal::zero())
-		},
-		Some(Token::VarGet(name)) => {
-			Ok(
-				match context.variables.get(&name) {
-					Some(val) => val.clone(),
-					None => return Err(CalcError::UnknownVariable(name))
-				}
-			)
-		},
-		_ => Err(CalcError::InvalidSyntax)
 	}
 }

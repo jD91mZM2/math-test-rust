@@ -95,26 +95,6 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 	let mut output = Vec::new();
 	let mut buffer = String::new();
 
-	macro_rules! prepare_num {
-		($num:expr) => {
-			if let Some(&Token::Sub) = output.last() {
-				match if output.len() >= 2 {
-						Some(&output[output.len() - 2])
-					} else {
-						None
-					} {
-
-					Some(&Token::Num(_)) |
-					Some(&Token::ParenClose) |
-					Some(&Token::VarGet(_)) => (),
-					_ => {
-						output.pop();
-						$num = -$num;
-					}
-				}
-			}
-		}
-	}
 	macro_rules! prepare_var {
 		() => {
 			if let Some(&Token::Num(_)) = output.last() {
@@ -127,8 +107,7 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 			if !buffer.is_empty() {
 				let buffer = mem::replace(&mut buffer, String::new());
 				match parse_num(&buffer) {
-					Ok(mut num) => {
-						prepare_num!(num);
+					Ok(num) => {
 						output.push(Token::Num(num));
 					},
 					Err(_) => {
@@ -177,8 +156,7 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
 		} else if c == '(' {
 			if !buffer.is_empty() {
 				match parse_num(&buffer) {
-					Ok(mut num) => {
-						prepare_num!(num);
+					Ok(num) => {
 						output.push(Token::Num(num));
 						output.push(Token::Mult);
 					},

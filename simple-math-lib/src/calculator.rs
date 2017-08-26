@@ -17,6 +17,7 @@ pub enum CalcError {
 	NotAWhole,
 	ParseError(ParseError),
 	SeparatorInDef,
+	TooDeep,
 	UnclosedParen,
 	UnknownFunction(String),
 	UnknownVariable(String)
@@ -44,11 +45,12 @@ impl std::error::Error for CalcError {
 			CalcError::ExpectedEOF(_) => "Expected EOF",
 			CalcError::IncorrectArguments(..) => "Incorrect amount of arguments",
 			CalcError::InvalidSyntax => "Invalid syntax",
-			CalcError::ParseError(ref error)  => error.description(),
-			CalcError::SeparatorInDef => "A function definition cannot have multiple arguments",
 			CalcError::NotAPositive => "You may only do this on positive numbers",
 			CalcError::NotAPrimitive(_) => "You may only do this on a specific primitive types",
 			CalcError::NotAWhole => "You may only do this on whole numbers",
+			CalcError::ParseError(ref error)  => error.description(),
+			CalcError::SeparatorInDef => "A function definition cannot have multiple arguments",
+			CalcError::TooDeep => "Too many levels deep. This could be an issue with endless recursion.",
 			CalcError::UnclosedParen => "Unclosed parenthensis",
 			CalcError::UnknownFunction(_) => "Unknown function",
 			CalcError::UnknownVariable(_) => "Unknown variable"
@@ -67,7 +69,7 @@ macro_rules! to_primitive {
 
 /// A Context for `calculate` to pass around to all its sub-functions
 pub struct Context<'a, I: Iterator<Item = Token>> {
-	toplevel: bool,
+	level: u8,
 
 	/// The tokens gotten by the parser
 	pub tokens: Peekable<I>,
@@ -84,7 +86,7 @@ impl<'a, I: Iterator<Item = Token>> Context<'a, I> {
 		) -> Context<'a, I> {
 
 		Context {
-			toplevel: true,
+			level: 0,
 			tokens: tokens,
 			variables: variables,
 			functions: functions
@@ -94,6 +96,10 @@ impl<'a, I: Iterator<Item = Token>> Context<'a, I> {
 
 /// Calculates the result in a recursive descent fashion
 pub fn calculate<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
+	if context.level == std::u8::MAX {
+		return Err(CalcError::TooDeep);
+	}
+
 	let expr1 = calc_level2(context)?;
 
 	if let Some(&Token::Xor) = context.tokens.peek() {
@@ -110,7 +116,7 @@ pub fn calculate<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<
 	match context.tokens.peek() {
 		Some(&Token::ParenClose) |
 		Some(&Token::Separator)
-		if !context.toplevel => Ok(expr1),
+		if context.level != 0 => Ok(expr1),
 
 		Some(_) => Err(CalcError::ExpectedEOF(context.tokens.next().unwrap())),
 		None => Ok(expr1)
@@ -237,15 +243,22 @@ fn calc_level8<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
 fn calc_level9<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option<String>) -> Result<BigDecimal, CalcError> {
 	if let Some(&Token::ParenOpen) = context.tokens.peek() {
 		context.tokens.next();
-		let toplevel = mem::replace(&mut context.toplevel, false);
 
-		let mut args = vec![calculate(context)?];
+		let mut args = Vec::new();
 
-		while let Some(&Token::Separator) = context.tokens.peek() {
-			context.tokens.next();
+		if let Some(&Token::ParenClose) = context.tokens.peek() {
+		} else {
+			context.level += 1;
+
 			args.push(calculate(context)?);
+
+			while let Some(&Token::Separator) = context.tokens.peek() {
+				context.tokens.next();
+				args.push(calculate(context)?);
+			}
+
+			context.level -= 1;
 		}
-		context.toplevel = toplevel;
 		if Some(Token::ParenClose) != context.tokens.next() {
 			return Err(CalcError::UnclosedParen);
 		}
@@ -284,7 +297,7 @@ fn calc_level9<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option
 					}
 					let val = calculate(&mut Context {
 						tokens: tokens.into_iter().peekable(),
-						toplevel: false,
+						level: context.level + 1,
 						variables: &mut context.variables,
 						functions: &mut context.functions
 					});
@@ -292,6 +305,7 @@ fn calc_level9<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option
 						let mut name = String::with_capacity(2);
 						name.push('$');
 						name.push_str(&i.to_string());
+						context.variables.remove(&name);
 					}
 					return val;
 				}
@@ -300,7 +314,12 @@ fn calc_level9<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option
 			usage!(1);
 		}
 
-		return Ok(args.remove(0));
+		if args.is_empty() {
+			use num::Zero;
+			return Ok(BigDecimal::zero())
+		} else {
+			return Ok(args.remove(0));
+		}
 	} else if name.is_none() {
 		if let Some(&Token::BlockName(_)) = context.tokens.peek() {
 			// Really ugly code, but we need to know the type *before* we walk out on it
@@ -323,16 +342,25 @@ fn get_number<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Big
 				context.tokens.next();
 				let mut fn_tokens = Vec::new();
 
+				let mut depth = 1;
 				loop {
 					let token = match context.tokens.next() {
-						Some(Token::Separator) => return Err(CalcError::SeparatorInDef),
+						Some(Token::Separator) if depth == 1 => return Err(CalcError::SeparatorInDef),
 						Some(token) => token,
 						None => return Err(CalcError::UnclosedParen)
 					};
-					let exit = token == Token::ParenClose;
+					if token == Token::ParenOpen {
+						depth += 1;
+					} else if token == Token::ParenClose {
+						depth -= 1;
+					}
 					fn_tokens.push(token);
 
-					if exit { break; }
+					if depth == 0 {
+						break;
+					} else if depth == std::u8::MAX {
+						return Err(CalcError::TooDeep);
+					}
 				}
 
 				context.functions.insert(name, fn_tokens);

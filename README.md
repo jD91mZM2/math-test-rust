@@ -24,7 +24,7 @@ After a lot of development, this actually turned out to be a pretty cool project
 Let's compare it to GNU `bc`!
 
 `simple-math` cons:
-- New technology. Therefor it's currently less stable.
+- New technology. Therefore it's currently less stable.
 - Power using `pow(x, y)`, not `x^y`. This is due to the `^` operator doing something else.
 - `bc` is more powerful.
 - Probably some more things I don't know about.

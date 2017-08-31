@@ -155,67 +155,79 @@ fn calc_level3<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
 	Ok(expr1)
 }
 fn calc_level4<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
-	let expr1 = calc_level5(context)?;
+	let mut expr1 = calc_level5(context)?;
 
-	use num::bigint::ToBigInt;
-	if let Some(&Token::BitshiftLeft) = context.tokens.peek() {
-		context.tokens.next();
-		let expr2 = calc_level4(context)?;
+    loop {
+        use num::bigint::ToBigInt;
+        if let Some(&Token::BitshiftLeft) = context.tokens.peek() {
+            context.tokens.next();
+            let expr2 = calc_level5(context)?;
 
-		use num::ToPrimitive;
-		let primitive2 = to_primitive!(expr2, to_usize, "usize");
+            use num::ToPrimitive;
+            let primitive2 = to_primitive!(expr2, to_usize, "usize");
 
-		require_whole(&expr1)?;
-		return Ok(BigDecimal::new(expr1.to_bigint().unwrap() << primitive2, 0));
-	} else if let Some(&Token::BitshiftRight) = context.tokens.peek() {
-		context.tokens.next();
-		let expr2 = calc_level4(context)?;
+            require_whole(&expr1)?;
+            expr1 = BigDecimal::new(expr1.to_bigint().unwrap() << primitive2, 0);
+        } else if let Some(&Token::BitshiftRight) = context.tokens.peek() {
+            context.tokens.next();
+            let expr2 = calc_level5(context)?;
 
-		use num::ToPrimitive;
-		let primitive2 = to_primitive!(expr2, to_usize, "usize");
+            use num::ToPrimitive;
+            let primitive2 = to_primitive!(expr2, to_usize, "usize");
 
-		require_whole(&expr1)?;
-		return Ok(BigDecimal::new(expr1.to_bigint().unwrap() >> primitive2, 0));
-	}
+            require_whole(&expr1)?;
+            expr1 = BigDecimal::new(expr1.to_bigint().unwrap() >> primitive2, 0);
+        } else {
+            break;
+        }
+    }
 
 	Ok(expr1)
 }
 fn calc_level5<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
-	let expr1 = calc_level6(context)?;
+	let mut expr1 = calc_level6(context)?;
 
-	if let Some(&Token::Add) = context.tokens.peek() {
-		context.tokens.next();
-		let expr2 = calc_level5(context)?;
+    loop {
+        if let Some(&Token::Add) = context.tokens.peek() {
+            context.tokens.next();
+            let expr2 = calc_level6(context)?;
 
-		return Ok(expr1 + expr2);
-	} else if let Some(&Token::Sub) = context.tokens.peek() {
-		context.tokens.next();
-		let expr2 = calc_level5(context)?;
+            expr1 = expr1 + expr2;
+        } else if let Some(&Token::Sub) = context.tokens.peek() {
+            context.tokens.next();
+            let expr2 = calc_level6(context)?;
 
-		return Ok(expr1 - expr2);
-	}
+            expr1 = expr1 - expr2;
+        } else {
+            break;
+        }
+    }
 
 	Ok(expr1)
 }
 fn calc_level6<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
-	let expr1 = calc_level7(context)?;
+	let mut expr1 = calc_level7(context)?;
 
-	if let Some(&Token::Mul) = context.tokens.peek() {
-		context.tokens.next();
-		let expr2 = calc_level6(context)?;
+    loop {
+        if let Some(&Token::Mul) = context.tokens.peek() {
+            context.tokens.next();
+            let expr2 = calc_level7(context)?;
 
-		return Ok(expr1 * expr2);
-	} else if let Some(&Token::Div) = context.tokens.peek() {
-		context.tokens.next();
-		let expr2 = calc_level6(context)?;
+            expr1 = expr1 * expr2;
+        } else if let Some(&Token::Div) = context.tokens.peek() {
+            context.tokens.next();
+            let expr2 = calc_level7(context)?;
 
-		use num::Zero;
-		if expr2.is_zero() {
-			return Err(CalcError::DivideByZero);
-		}
+            use num::Zero;
+            if expr2.is_zero() {
+                return Err(CalcError::DivideByZero);
+            }
 
-		return Ok(expr1 / expr2);
-	}
+            expr1 = expr1 / expr2;
+        } else {
+            break;
+        }
+    }
 
 	Ok(expr1)
 }

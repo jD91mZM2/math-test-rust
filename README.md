@@ -28,6 +28,7 @@ Let's compare it to GNU `bc`!
 - Power using `pow(x, y)`, not `x^y`. This is due to the `^` operator doing something else.
 - `bc` is more powerful.
 - Probably some more things I don't know about.
+
 `simple-math` pros:
 - Supports factorial built-in.
 - No need to struggle with `scale=`.

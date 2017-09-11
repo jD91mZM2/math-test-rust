@@ -409,49 +409,46 @@ fn require_positive(num: &BigDecimal) -> Result<(), CalcError> {
     }
 }
 /// Calculates the factorial of `num`
-pub fn factorial(num: BigDecimal, result: Option<BigDecimal>) -> Result<BigDecimal, CalcError> {
+pub fn factorial(num: BigDecimal, acc: Option<BigDecimal>) -> Result<BigDecimal, CalcError> {
     require_whole(&num)?;
     require_positive(&num)?;
 
     use num::{Zero, One};
     if num.is_zero() {
-        Ok(result.unwrap_or_else(BigDecimal::one))
+        Ok(acc.unwrap_or_else(BigDecimal::one))
     } else {
-        let result = result.unwrap_or_else(BigDecimal::one);
-        let result = Some(result * &num);
+        let acc = acc.unwrap_or_else(BigDecimal::one);
+        let acc = Some(acc * &num);
         // Y THIS NO TAILCALL OPTIMIZE
-        factorial(num - BigDecimal::one(), result)
+        factorial(num - BigDecimal::one(), acc)
     }
 }
 /// Calculates `num` to the power of `power`
-pub fn pow(num: BigDecimal, power: BigDecimal, result: Option<BigDecimal>) -> Result<BigDecimal, CalcError> {
+pub fn pow(num: BigDecimal, power: BigDecimal, acc: Option<BigDecimal>) -> Result<BigDecimal, CalcError> {
     require_positive(&num)?;
     require_whole(&power)?;
 
     use num::{Zero, One};
-    let one = BigDecimal::one();
-    if power.is_zero() {
-        Ok(result.unwrap_or(one))
-    } else if power == one {
-        Ok(result.unwrap_or_else(|| num.clone()))
-    } else {
-        match power.sign() {
-            Sign::NoSign => unreachable!(),
-            Sign::Plus => {
-                let result = result.unwrap_or_else(|| num.clone());
-                let result = Some(result * &num);
-                // Y THIS NO TAILCALL OPTIMIZE
-                pow(num, power - one, result)
-            },
-            Sign::Minus => {
-                // `let power = ...` is kinda ugly, but I need it to happen BEFORE
-                // the reference dies to avoid cloning.
-                let power = power + &one;
-                let result = result.unwrap_or(one);
-                let result = Some(result / &num);
-                // Y THIS NO TAILCALL OPTIMIZE
-                pow(num, power, result)
+    match power.sign() {
+        Sign::NoSign => {
+            Ok(acc.unwrap_or_else(|| num.clone()))
+        },
+        Sign::Plus => {
+            let one = BigDecimal::one();
+            let two = BigDecimal::from(2);
+
+            if (&power % &two).is_zero() {
+                let acc = Some(acc.unwrap_or(one) * &num * &num);
+                pow(num, power / two, acc)
+            } else {
+                let power = power - &one;
+                let acc = Some(acc.unwrap_or(one) * &num);
+                pow(num, power, acc)
             }
+        },
+        Sign::Minus => {
+            use num::Signed;
+            pow(BigDecimal::one() / num, power.abs(), acc)
         }
     }
 }

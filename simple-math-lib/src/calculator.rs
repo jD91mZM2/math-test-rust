@@ -224,6 +224,17 @@ fn calc_level6<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
             }
 
             expr1 = expr1 / expr2;
+        } else if let Some(&Token::Rem) = context.tokens.peek() {
+            context.tokens.next();
+            let expr2 = calc_level7(context)?;
+
+            use num::Zero;
+            if expr2.is_zero() {
+                return Err(CalcError::DivideByZero);
+            }
+
+            use num::bigint::ToBigInt;
+            expr1 = BigDecimal::new(expr1.to_bigint().unwrap() % expr2.to_bigint().unwrap(), 0);
         } else {
             break;
         }

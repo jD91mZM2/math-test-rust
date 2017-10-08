@@ -6,48 +6,52 @@ use std::{self, fmt, mem};
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Token {
     BlockName(String),
+    Num(BigDecimal),
+    ParenClose,
     ParenOpen,
     Separator,
-    ParenClose,
     VarAssign(String),
     VarGet(String),
-    Num(BigDecimal),
+
     Add,
-    Sub,
-    Mul,
-    Div,
-    Rem,
     And,
-    Or,
-    Xor,
     BitshiftLeft,
     BitshiftRight,
+    Div,
+    Factorial,
+    Mul,
     Not,
-    Factorial
+    Or,
+    Pow,
+    Rem,
+    Sub,
+    Xor
 }
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             Token::BlockName(ref name) => write!(f, "\"{}\"", name),
+            Token::Num(ref num) => write!(f, "Number {}", num),
+            Token::ParenClose => write!(f, ")"),
             Token::ParenOpen => write!(f, "("),
             Token::Separator => write!(f, ","),
-            Token::ParenClose => write!(f, ")"),
             Token::VarAssign(ref name) => write!(f, "Variable assignment \"{}\"", name),
             Token::VarGet(ref name) => write!(f, "Variable \"{}\"", name),
-            Token::Num(ref num) => write!(f, "Number {}", num),
+
             Token::Add => write!(f, "Plus (+)"),
-            Token::Sub => write!(f, "Minus (-)"),
-            Token::Mul => write!(f, "Times (*)"),
-            Token::Div => write!(f, "Division symbol (/)"),
-            Token::Rem => write!(f, "Remainder (%)"),
             Token::And => write!(f, "Bitwise AND (&)"),
-            Token::Or => write!(f, "Bitwise OR (|)"),
-            Token::Xor => write!(f, "Bitwise XOR (^)"),
             Token::BitshiftLeft => write!(f, "Bitshift left (<<)"),
             Token::BitshiftRight => write!(f, "Bitshift right (>>)"),
+            Token::Div => write!(f, "Division symbol (/)"),
+            Token::Factorial => write!(f, "Factorial (!)"),
+            Token::Mul => write!(f, "Times (*)"),
             Token::Not => write!(f, "Bitwise NOT (~)"),
-            Token::Factorial => write!(f, "Factorial (!)")
+            Token::Or => write!(f, "Bitwise OR (|)"),
+            Token::Pow => write!(f, "Exponential (**)"),
+            Token::Rem => write!(f, "Remainder (%)"),
+            Token::Sub => write!(f, "Minus (-)"),
+            Token::Xor => write!(f, "Bitwise XOR (^)")
         }
     }
 }
@@ -119,7 +123,7 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
         }
     }
 
-    let mut chars = input.chars().enumerate();
+    let mut chars = input.chars().enumerate().peekable();
     while let Some((i, c)) = chars.next() {
         let token = match c {
             ' ' => continue,
@@ -127,7 +131,12 @@ pub fn parse(input: &str) -> Result<Vec<Token>, ParseError> {
             ')' => Some(Token::ParenClose),
             '+' => Some(Token::Add),
             '-' => Some(Token::Sub),
-            '*' => Some(Token::Mul),
+            '*' => if let Some(&(_, '*')) = chars.peek() {
+                    chars.next();
+                    Some(Token::Pow)
+                } else {
+                    Some(Token::Mul)
+                },
             '/' => Some(Token::Div),
             '%' => Some(Token::Rem),
             '&' => Some(Token::And),

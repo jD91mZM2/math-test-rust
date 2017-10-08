@@ -243,7 +243,17 @@ fn calc_level6<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
     Ok(expr1)
 }
 fn calc_level7<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
-    let expr = calc_level8(context)?;
+    let expr1 = calc_level8(context)?;
+    if let Some(&Token::Pow) = context.tokens.peek() {
+        context.tokens.next();
+        let expr2 = calc_level7(context)?; // Right associative
+
+        return pow(expr1, expr2, None);
+    }
+    Ok(expr1)
+}
+fn calc_level8<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
+    let expr = calc_level9(context)?;
     if let Some(&Token::Factorial) = context.tokens.peek() {
         context.tokens.next();
 
@@ -251,19 +261,19 @@ fn calc_level7<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
     }
     Ok(expr)
 }
-fn calc_level8<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
+fn calc_level9<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<BigDecimal, CalcError> {
     if let Some(&Token::Not) = context.tokens.peek() {
         context.tokens.next();
         use num::ToPrimitive;
-        let expr = calc_level8(context)?;
+        let expr = calc_level9(context)?;
         let primitive = to_primitive!(expr, to_i64, "i64");
 
         return Ok(BigDecimal::from(!primitive));
     }
 
-    Ok(calc_level9(context, None)?)
+    Ok(calc_paren(context, None)?)
 }
-fn calc_level9<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option<String>) -> Result<BigDecimal, CalcError> {
+fn calc_paren<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option<String>) -> Result<BigDecimal, CalcError> {
     if let Some(&Token::ParenOpen) = context.tokens.peek() {
         context.tokens.next();
 
@@ -347,7 +357,7 @@ fn calc_level9<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option
         if let Some(&Token::BlockName(_)) = context.tokens.peek() {
             // Really ugly code, but we need to know the type *before* we walk out on it
             if let Some(Token::BlockName(name)) = context.tokens.next() {
-                return calc_level9(context, Some(name));
+                return calc_paren(context, Some(name));
             }
         }
     }
@@ -358,7 +368,7 @@ fn get_number<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Big
     match context.tokens.next() {
         Some(Token::Num(num)) => Ok(num),
         Some(Token::Sub) => {
-            Ok(-calc_level9(context, None)?)
+            Ok(-calc_paren(context, None)?)
         },
         Some(Token::VarAssign(name)) => {
             if let Some(&Token::ParenOpen) = context.tokens.peek() {

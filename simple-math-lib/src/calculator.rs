@@ -83,7 +83,7 @@ impl<'a, I: Iterator<Item = Token>> Context<'a, I> {
         tokens: Peekable<I>,
         variables: &'a mut HashMap<String, BigDecimal>,
         functions: &'a mut HashMap<String, Vec<Token>>
-        ) -> Context<'a, I> {
+    ) -> Self {
 
         Context {
             level: 0,
@@ -192,12 +192,12 @@ fn calc_level5<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
             context.tokens.next();
             let expr2 = calc_level6(context)?;
 
-            expr1 = expr1 + expr2;
+            expr1 += expr2;
         } else if let Some(&Token::Sub) = context.tokens.peek() {
             context.tokens.next();
             let expr2 = calc_level6(context)?;
 
-            expr1 = expr1 - expr2;
+            expr1 -= expr2;
         } else {
             break;
         }
@@ -213,7 +213,7 @@ fn calc_level6<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
             context.tokens.next();
             let expr2 = calc_level7(context)?;
 
-            expr1 = expr1 * expr2;
+            expr1 *= expr2;
         } else if let Some(&Token::Div) = context.tokens.peek() {
             context.tokens.next();
             let expr2 = calc_level7(context)?;

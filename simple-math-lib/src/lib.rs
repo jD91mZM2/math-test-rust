@@ -7,7 +7,7 @@ pub mod parser;
 use bigdecimal::BigDecimal;
 use std::collections::HashMap;
 
-/// Calls both parser::parse and calculator::calculate
+/// Calls both `parser::parse` and `calculator::calculate`
 /// and merges the output into one happy Result.
 pub fn parse_and_calc(
         input: &str,

@@ -5,7 +5,7 @@ name = "simple-math"
 version = "0.1.0"
 [dependencies]
 bigdecimal = "0.0.10"
-num = "0.1.40"
+num = "0.1.42"
 rustyline = "1.0.0"
 
 [dependencies.simple_math_lib]

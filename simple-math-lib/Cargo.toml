@@ -3,7 +3,7 @@ authors = ["jD91mZM2 <me@krake.one>"]
 license = "MIT"
 name = "simple_math_lib"
 version = "0.1.0"
-
 [dependencies]
 bigdecimal = "0.0.10"
+failure = "0.1.1"
 num = "0.1.40"

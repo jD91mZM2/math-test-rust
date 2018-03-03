@@ -3,59 +3,37 @@ use num::bigint::Sign;
 use parser::{Token, ParseError};
 use std::collections::HashMap;
 use std::iter::Peekable;
-use std::{self, fmt, mem};
+use std::{self, mem};
 
 /// An error when calculating
-#[derive(Debug)]
+#[derive(Debug, Fail)]
 pub enum CalcError {
+    #[fail(display = "Cannot divide by zero")]
     DivideByZero,
+    #[fail(display = "Expected EOF, found {}", _0)]
     ExpectedEOF(Token),
+    #[fail(display = "Incorrect amount of arguments (Expected {}, got {})", _0, _1)]
     IncorrectArguments(usize, usize),
+    #[fail(display = "Invalid syntax")]
     InvalidSyntax,
+    #[fail(display = "You may only do this on positive numbers")]
     NotAPositive,
+    #[fail(display = "Number must fit the range of a {} primitive", _0)]
     NotAPrimitive(&'static str),
+    #[fail(display = "You may only do this on whole numbers")]
     NotAWhole,
-    ParseError(ParseError),
+    #[fail(display = "Parse error: {}", _0)]
+    ParseError(#[cause] ParseError),
+    #[fail(display = "A function definition cannot have multiple arguments")]
     SeparatorInDef,
+    #[fail(display = "Too many levels deep. This could be an issue with endless recursion.")]
     TooDeep,
+    #[fail(display = "Unclosed parentheses")]
     UnclosedParen,
+    #[fail(display = "Unknown function \"{}\"\nHint: Cannot assume multiplication of variables because of ambiguity", _0)]
     UnknownFunction(String),
+    #[fail(display = "Unknown variable \"{}\"", _0)]
     UnknownVariable(String)
-}
-impl fmt::Display for CalcError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use std::error::Error;
-        match *self {
-            CalcError::ExpectedEOF(ref found) => write!(f, "Expected EOF, found {}", found),
-            CalcError::IncorrectArguments(expected, received) =>
-                write!(f, "Incorrect amount of arguments (Expected {}, got {})", expected, received),
-            CalcError::NotAPrimitive(primitive) => write!(f, "Must fit in the range of an {} primitive", primitive),
-            CalcError::ParseError(ref error) => write!(f, "{}", error),
-            CalcError::UnknownFunction(ref name) =>
-                write!(f, "Unknown function \"{}\"\nHint: Cannot assume multiplication of variables because of ambiguity", name),
-            CalcError::UnknownVariable(ref name) => write!(f, "Unknown variable \"{}\"", name),
-            _ => write!(f, "{}", self.description())
-        }
-    }
-}
-impl std::error::Error for CalcError {
-    fn description(&self) -> &str {
-        match *self {
-            CalcError::DivideByZero => "Cannot divide by zero",
-            CalcError::ExpectedEOF(_) => "Expected EOF",
-            CalcError::IncorrectArguments(..) => "Incorrect amount of arguments",
-            CalcError::InvalidSyntax => "Invalid syntax",
-            CalcError::NotAPositive => "You may only do this on positive numbers",
-            CalcError::NotAPrimitive(_) => "You may only do this on a specific primitive types",
-            CalcError::NotAWhole => "You may only do this on whole numbers",
-            CalcError::ParseError(ref error)  => error.description(),
-            CalcError::SeparatorInDef => "A function definition cannot have multiple arguments",
-            CalcError::TooDeep => "Too many levels deep. This could be an issue with endless recursion.",
-            CalcError::UnclosedParen => "Unclosed parenthensis",
-            CalcError::UnknownFunction(_) => "Unknown function",
-            CalcError::UnknownVariable(_) => "Unknown variable"
-        }
-    }
 }
 
 macro_rules! to_primitive {
@@ -248,7 +226,7 @@ fn calc_level7<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
         context.tokens.next();
         let expr2 = calc_level7(context)?; // Right associative
 
-        return pow(expr1, expr2, None);
+        return pow(expr1, expr2, None, 0);
     }
     Ok(expr1)
 }
@@ -257,7 +235,7 @@ fn calc_level8<I: Iterator<Item = Token>>(context: &mut Context<I>) -> Result<Bi
     if let Some(&Token::Factorial) = context.tokens.peek() {
         context.tokens.next();
 
-        return factorial(expr, None);
+        return factorial(expr, None, 0);
     }
     Ok(expr)
 }
@@ -314,7 +292,7 @@ fn calc_paren<I: Iterator<Item = Token>>(context: &mut Context<I>, name: Option<
                 "pow" => {
                     usage!(2);
                     use num::Zero;
-                    args[0] = pow(mem::replace(&mut args[0], BigDecimal::zero()), args.remove(1), None)?;
+                    args[0] = pow(mem::replace(&mut args[0], BigDecimal::zero()), args.remove(1), None, 0)?;
                 },
                 _ => {
                     let tokens = match context.functions.get(&name) {
@@ -430,7 +408,10 @@ fn require_positive(num: &BigDecimal) -> Result<(), CalcError> {
     }
 }
 /// Calculates the factorial of `num`
-pub fn factorial(num: BigDecimal, acc: Option<BigDecimal>) -> Result<BigDecimal, CalcError> {
+pub fn factorial(num: BigDecimal, acc: Option<BigDecimal>, times: u8) -> Result<BigDecimal, CalcError> {
+    if times == std::u8::MAX {
+        return Err(CalcError::TooDeep);
+    }
     require_whole(&num)?;
     require_positive(&num)?;
 
@@ -441,11 +422,14 @@ pub fn factorial(num: BigDecimal, acc: Option<BigDecimal>) -> Result<BigDecimal,
         let acc = acc.unwrap_or_else(BigDecimal::one);
         let acc = Some(acc * &num);
         // Y THIS NO TAILCALL OPTIMIZE
-        factorial(num - BigDecimal::one(), acc)
+        factorial(num - BigDecimal::one(), acc, times + 1)
     }
 }
 /// Calculates `num` to the power of `power`
-pub fn pow(num: BigDecimal, power: BigDecimal, acc: Option<BigDecimal>) -> Result<BigDecimal, CalcError> {
+pub fn pow(num: BigDecimal, power: BigDecimal, acc: Option<BigDecimal>, times: u8) -> Result<BigDecimal, CalcError> {
+    if times == std::u8::MAX {
+        return Err(CalcError::TooDeep);
+    }
     require_positive(&num)?;
     require_whole(&power)?;
 
@@ -460,16 +444,16 @@ pub fn pow(num: BigDecimal, power: BigDecimal, acc: Option<BigDecimal>) -> Resul
 
             if (&power % &two).is_zero() {
                 let acc = Some(acc.unwrap_or(one) * &num * &num);
-                pow(num, power / two, acc)
+                pow(num, power / two, acc, times + 1)
             } else {
                 let power = power - &one;
                 let acc = Some(acc.unwrap_or(one) * &num);
-                pow(num, power, acc)
+                pow(num, power, acc, times + 1)
             }
         },
         Sign::Minus => {
             use num::Signed;
-            pow(BigDecimal::one() / num, power.abs(), acc)
+            pow(BigDecimal::one() / num, power.abs(), acc, times + 1)
         }
     }
 }

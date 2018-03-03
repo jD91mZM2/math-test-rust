@@ -1,4 +1,5 @@
 extern crate bigdecimal;
+#[macro_use] extern crate failure;
 extern crate num;
 
 pub mod calculator;

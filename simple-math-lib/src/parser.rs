@@ -1,9 +1,9 @@
 use bigdecimal::BigDecimal;
 use calculator::CalcError;
-use std::{self, fmt, mem};
+use std::{fmt, mem};
 
 /// A token
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Token {
     BlockName(String),
     Num(BigDecimal),
@@ -57,35 +57,18 @@ impl fmt::Display for Token {
 }
 
 /// An error when parsing
-#[derive(Debug)]
+#[derive(Debug, Fail)]
 pub enum ParseError {
+    #[fail(display = "Character '{}' neither a number nor a valid letter \
+                      in a function or variable name.", _0)]
     DisallowedChar(char),
+    #[fail(display = "You may only use whole numbers in this context")]
     DisallowedDecimal,
+    #[fail(display = "\"{}\" is not a valid variable name.", _0)]
     DisallowedVariable(String),
+    #[fail(display = "Character '{0}' isn't followed by another '{0}'.\n\
+                      Looks like a failed attempt to bitshift.", _0)]
     UnclosedBitShift(char)
-}
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use std::error::Error;
-        match *self {
-            ParseError::DisallowedChar(c) => write!(f, "Character '{}' neither a number nor a valid letter \
-                                                        in a function or variable name.", c),
-            ParseError::UnclosedBitShift(c) => write!(f, "Character '{}' isn't followed by another '{}'.\n\
-                                                          Looks like a failed attempt to bitshift.", c, c),
-            ParseError::DisallowedVariable(ref var) => write!(f, "\"{}\" is not a valid variable name.", var),
-            _ => write!(f, "{}", self.description())
-        }
-    }
-}
-impl std::error::Error for ParseError {
-    fn description(&self) -> &str {
-        match *self {
-            ParseError::DisallowedChar(_) => "A character you used was not allowed",
-            ParseError::DisallowedDecimal => "You may only use whole numbers in this context",
-            ParseError::DisallowedVariable(_) => "Not a valid variable name.",
-            ParseError::UnclosedBitShift(_) => "A < or > wasn't followed by another one, which is the way to bitshift"
-        }
-    }
 }
 impl Into<CalcError> for ParseError {
     fn into(self) -> CalcError {

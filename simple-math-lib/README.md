@@ -9,5 +9,5 @@ so it's probably best to keep to the latest version.
 
 Include it in your project with
 ```
-simple_math_lib = { git = "https://github.com/legolord208/simple-math" }
+simple_math_lib = { git = "https://github.com/jD91mZM2/simple-math" }
 ```

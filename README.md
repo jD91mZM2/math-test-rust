@@ -1,5 +1,20 @@
 # simple-math
 
+# Abandoned
+
+`simple-math` is a badly-named messy piece of crap that doesn't even support compiling to AST before executing.
+
+Alternatives:
+
+- For a binary, check out [math-test-haskell](https://github.com/jD91mZM2/math-test-haskell).
+  Even though Haskell is probably slower, for this particular project I don't really care.
+- For a library, check out [calc](https://github.com/redox-os/calc), maintained by the Redox team
+  and used within the ion shell.
+
+-------------------------
+
+# Original README
+
 I was bored, so I made some simple math parser and calculator.
 
 - [x] Arbitrary-length ("big") numbers. (Thanks to library "num")
